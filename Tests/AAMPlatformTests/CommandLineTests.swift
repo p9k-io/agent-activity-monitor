@@ -140,4 +140,90 @@ struct CommandLineTests {
     #expect(table.contains("OUTCOME"))
     #expect(table.contains("3 exited."))
   }
+
+  // MARK: Model Context Protocol
+
+  /// Starts `aam mcp`, sends the messages one per line and returns the replies.
+  func converse(_ messages: [String]) throws -> [JSONValue] {
+    let aam = Process()
+    aam.executableURL = Helper.url.deletingLastPathComponent().appendingPathComponent("aam")
+    aam.arguments = ["mcp"]
+    aam.environment = ["AAM_STORE": store.path, "HOME": NSHomeDirectory()]
+    let input = Pipe()
+    let output = Pipe()
+    aam.standardInput = input
+    aam.standardOutput = output
+    aam.standardError = FileHandle.nullDevice
+    try aam.run()
+    input.fileHandleForWriting.write(Data((messages.joined(separator: "\n") + "\n").utf8))
+    try input.fileHandleForWriting.close()
+    let data = output.fileHandleForReading.readDataToEndOfFile()
+    aam.waitUntilExit()
+    #expect(aam.terminationStatus == 0)
+    return try data.split(separator: UInt8(ascii: "\n")).map {
+      try JSONDecoder().decode(JSONValue.self, from: Data($0))
+    }
+  }
+
+  /// The JSON a tool call answered with.
+  func toolResult(_ reply: JSONValue) throws -> JSONValue {
+    let text = try #require(reply["result"]?["content"]?.array?.first?["text"]?.string)
+    return try JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))
+  }
+
+  @Test func `an agent can connect over stdio, list the tools and read the Sessions`() throws {
+    let replies = try converse([
+      #"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
+      #"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
+      #"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#,
+      #"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_sessions","arguments":{}}}"#,
+    ])
+
+    #expect(replies.count == 3)
+    #expect(replies[0]["result"]?["serverInfo"]?["name"] == .string("agent-activity-monitor"))
+    let tools = try #require(replies[1]["result"]?["tools"]?.array).compactMap {
+      $0["name"]?.string
+    }
+    #expect(
+      tools == [
+        "list_sessions", "my_session", "list_culprits", "list_stale", "request_cleanup",
+        "get_request",
+      ])
+    #expect(replies[2]["result"]?["isError"] == .bool(false))
+    #expect(try toolResult(replies[2])["sessions"]?.array != nil)
+  }
+
+  @Test func `an agent can ask for a Cleanup and nothing is ended by asking`() throws {
+    let helper = try Helper.sleeping(seconds: 30)
+    defer { helper.terminate() }
+    let pid = helper.processIdentifier
+
+    let filed = try toolResult(
+      try #require(
+        converse([
+          #"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"request_cleanup","arguments":{"pids":[\#(pid)],"reason":"left by my tests"}}}"#
+        ]).first))
+    let id = try #require(filed["id"]?.string)
+    let read = try toolResult(
+      try #require(
+        converse([
+          #"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_request","arguments":{"id":"\#(id)"}}}"#
+        ]).first))
+
+    #expect(filed["status"] == JSONValue.string("pending"))
+    #expect(read["status"] == JSONValue.string("pending"))
+    #expect(read["reason"] == JSONValue.string("left by my tests"))
+    #expect(try Store(url: store).requests(status: .pending).map(\.id) == [id])
+    #expect(helper.isRunning)
+  }
+
+  @Test func `a tool that is given nonsense says so instead of failing the connection`() throws {
+    let replies = try converse([
+      #"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"request_cleanup","arguments":{"pids":["all of them"]}}}"#,
+      #"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_request","arguments":{"id":"nope"}}}"#,
+    ])
+
+    #expect(replies.map { $0["result"]?["isError"] } == [.bool(true), .bool(true)])
+    #expect((try? Store(url: store).requests())?.isEmpty != false)
+  }
 }

@@ -40,6 +40,26 @@ aam requests    # Cleanup requests and what was decided about them
 
 What `aam` and the app remember (which process belonged to which Session, and when a Session ended) is kept in `~/Library/Application Support/io.p9k.agent-activity-monitor/aam.sqlite`. Set `AAM_STORE` to keep it somewhere else.
 
+## For agents
+
+`aam mcp` serves the same facts over the Model Context Protocol, so a Session can see what is attributed to it and ask for a Cleanup of what it no longer needs. Connect it yourself; the app never changes a Harness's configuration.
+
+```sh
+claude mcp add aam -- aam mcp    # Claude Code
+codex mcp add aam -- aam mcp     # Codex CLI
+```
+
+| Tool | What it does |
+| --- | --- |
+| `list_sessions` | The running Sessions with Project, state, memory and Resume command. |
+| `my_session` | The Session the server runs in and what is attributed to it. |
+| `list_culprits` | What is using CPU right now and whom it belongs to. |
+| `list_stale` | What is no longer needed, and why. |
+| `request_cleanup` | Files a Cleanup request for a person to decide in the app. |
+| `get_request` | What was decided about a Cleanup request. |
+
+None of them ends a process. At most 50 requests wait for a decision at a time, and a request names at most 100 processes.
+
 ## Cleanup
 
 Nothing is ended without a dialog that lists it first. The dialog shows every process a Cleanup would end, how much memory that frees, what is left alone and why, and what you should know before you say yes: that a Session is working right now, or that an older copy of a server is only probably left behind.

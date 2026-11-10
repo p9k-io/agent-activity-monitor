@@ -26,32 +26,19 @@ struct RequestCleanup: ParsableCommand {
       throw failure("aam: the store at \(Store.defaultURL.path) cannot be opened.")
     }
     let reading = Monitor(store: store).look().observation
-    // A process that is not there is asked for by a key nothing can match, so that the
-    // planner reports it as gone.
-    let keys = pids.map { pid in
-      reading.snapshot.processes.first { $0.pid == pid }?.key
-        ?? ProcessRecord.Key(pid: pid, startedAt: .distantPast)
+    let filed: (request: CleanupRequest, refused: [CleanupPlan.Refusal])
+    do {
+      filed = try CleanupRequestFiler(store: store).file(pids: pids, reason: reason, in: reading)
+    } catch let refusal as CleanupRequestFiler.Refusal {
+      throw failure("aam: \(refusal)")
     }
-    let plan = CleanupPlanner(ownUser: getuid(), protected: [])
-      .plan(for: keys, in: reading.snapshot, includingDescendants: false)
-    guard !plan.targets.isEmpty else {
-      let reasons = plan.refused.map { "\($0.process.pid): \($0.reason.explanation)" }
-      throw failure("aam: nothing to ask for.\n" + reasons.joined(separator: "\n"))
-    }
-
-    let request = CleanupRequest(
-      id: String(UUID().uuidString.lowercased().prefix(8)),
-      createdAt: Date(),
-      requester: reading.inventory.session(owning: getpid())?.session.id,
-      reason: reason,
-      targets: plan.targets.map(\.key))
-    try store.add(request)
 
     if output.json {
-      try printJSON(RequestRow(request, refused: plan.refused))
+      try printJSON(RequestRow(filed.request, refused: filed.refused))
     } else {
-      print("Filed Cleanup request \(request.id) for \(request.targets.count) processes.")
-      for refusal in plan.refused {
+      print(
+        "Filed Cleanup request \(filed.request.id) for \(filed.request.targets.count) processes.")
+      for refusal in filed.refused {
         print("Left out \(refusal.process.pid): \(refusal.reason.explanation)")
       }
       print("A person decides in the Agent Activity Monitor app. See it with: aam requests")
