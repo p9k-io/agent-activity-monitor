@@ -11,7 +11,10 @@ struct AAMCommand: ParsableCommand {
       Agent Activity Monitor app after a person confirms it.
       """,
     version: AAM.version,
-    subcommands: [Sessions.self, Processes.self, Culprits.self, Stale.self, Mine.self]
+    subcommands: [
+      Sessions.self, Processes.self, Culprits.self, Stale.self, Mine.self, RequestCleanup.self,
+      Requests.self,
+    ]
   )
 }
 

@@ -77,4 +77,54 @@ struct StoreTests {
       try Store(url: url)
     }
   }
+
+  // MARK: Cleanup requests
+
+  func request(_ id: String, after seconds: TimeInterval = 0) -> CleanupRequest {
+    CleanupRequest(
+      id: id, createdAt: epoch.addingTimeInterval(seconds),
+      requester: SessionID(harness: .claudeCode, value: "s1"), reason: "left over from my tests",
+      targets: [ProcessRecord.Key(pid: 4242, startedAt: epoch.addingTimeInterval(1.234567))])
+  }
+
+  @Test func `a Cleanup request that was filed is found again, the oldest first`() throws {
+    let store = try Store(url: url)
+
+    try store.add(request("b", after: 10))
+    try store.add(request("a"))
+
+    #expect(try store.requests() == [request("a"), request("b", after: 10)])
+    #expect(try store.requests().first?.status == .pending)
+  }
+
+  @Test func `a decision on a Cleanup request is kept with what the Cleanup did`() throws {
+    let store = try Store(url: url)
+    try store.add(request("a"))
+    var decided = request("a")
+    decided.status = .done
+    decided.decidedAt = epoch.addingTimeInterval(60)
+    decided.outcome = CleanupRequest.Outcome(ended: 2, killed: 1, survived: 0, refused: 0)
+
+    try store.update(decided)
+
+    #expect(try store.requests() == [decided])
+    #expect(try store.requests(status: .pending).isEmpty)
+    #expect(try store.requests(status: .done) == [decided])
+  }
+
+  @Test func `a Cleanup request filed through one connection is seen through another`() throws {
+    try Store(url: url).add(request("a"))
+
+    #expect(try Store(url: url).requests(status: .pending).map(\.id) == ["a"])
+  }
+
+  @Test func `a Cleanup request filed outside any Session has no requester`() throws {
+    let store = try Store(url: url)
+    let anonymous = CleanupRequest(
+      id: "x", createdAt: epoch, requester: nil, reason: "", targets: [])
+
+    try store.add(anonymous)
+
+    #expect(try store.requests() == [anonymous])
+  }
 }

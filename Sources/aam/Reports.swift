@@ -225,6 +225,40 @@ struct StaleReport: Encodable {
   }
 }
 
+struct RequestRow: Encodable {
+  struct Refused: Encodable {
+    let pid: Int32
+    let reason: String
+  }
+
+  let id: String
+  let createdAt: Date
+  let requester: String?
+  let reason: String
+  let pids: [Int32]
+  let status: String
+  let decidedAt: Date?
+  let outcome: CleanupRequest.Outcome?
+  /// Processes that were asked for and left out, when the request was filed just now.
+  let refused: [Refused]
+
+  init(_ request: CleanupRequest, refused: [CleanupPlan.Refusal]) {
+    id = request.id
+    createdAt = request.createdAt
+    requester = request.requester?.description
+    reason = request.reason
+    pids = request.targets.map(\.pid)
+    status = request.status.rawValue
+    decidedAt = request.decidedAt
+    outcome = request.outcome
+    self.refused = refused.map { Refused(pid: $0.process.pid, reason: $0.reason.rawValue) }
+  }
+}
+
+struct RequestsReport: Encodable {
+  let requests: [RequestRow]
+}
+
 func printJSON(_ value: some Encodable) throws {
   let encoder = JSONEncoder()
   encoder.dateEncodingStrategy = .iso8601

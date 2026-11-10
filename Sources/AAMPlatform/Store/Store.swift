@@ -127,6 +127,73 @@ public final class Store: @unchecked Sendable {
     }
   }
 
+  // MARK: Cleanup requests
+
+  public func add(_ request: CleanupRequest) throws {
+    try locked {
+      try run(
+        "INSERT INTO requests VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        .text(request.id), .date(request.createdAt),
+        request.requester.map { .text($0.harness.rawValue) } ?? .null,
+        request.requester.map { .text($0.value) } ?? .null,
+        .text(request.reason), .text(json(request.targets)), .text(request.status.rawValue),
+        request.decidedAt.map(Value.date) ?? .null,
+        request.outcome.map { .text(json($0)) } ?? .null)
+    }
+  }
+
+  /// Records a decision: the status, when it was made and what the Cleanup did.
+  public func update(_ request: CleanupRequest) throws {
+    try locked {
+      try run(
+        "UPDATE requests SET status = ?, decided_at = ?, outcome = ? WHERE id = ?",
+        .text(request.status.rawValue), request.decidedAt.map(Value.date) ?? .null,
+        request.outcome.map { .text(json($0)) } ?? .null, .text(request.id))
+    }
+  }
+
+  /// Cleanup requests, the oldest first. With a status, only those in it.
+  public func requests(status: CleanupRequest.Status? = nil) throws -> [CleanupRequest] {
+    try locked {
+      var found: [CleanupRequest] = []
+      try rows(
+        """
+        SELECT id, created_at, requester_harness, requester_id, reason, targets, status,
+               decided_at, outcome
+        FROM requests ORDER BY created_at, id
+        """
+      ) { row in
+        let request = CleanupRequest(
+          id: row.text(0),
+          createdAt: row.date(1),
+          requester: row.optionalText(2).flatMap { harness in
+            row.optionalText(3).map {
+              SessionID(harness: HarnessID(rawValue: harness), value: $0)
+            }
+          },
+          reason: row.text(4),
+          targets: decode([ProcessRecord.Key].self, from: row.text(5)) ?? [],
+          status: CleanupRequest.Status(rawValue: row.text(6)) ?? .pending,
+          decidedAt: row.optionalDate(7),
+          outcome: row.optionalText(8).flatMap {
+            decode(CleanupRequest.Outcome.self, from: $0)
+          })
+        if status == nil || request.status == status {
+          found.append(request)
+        }
+      }
+      return found
+    }
+  }
+
+  private func json(_ value: some Encodable) -> String {
+    String(decoding: (try? JSONEncoder().encode(value)) ?? Data(), as: UTF8.self)
+  }
+
+  private func decode<T: Decodable>(_ type: T.Type, from text: String) -> T? {
+    try? JSONDecoder().decode(type, from: Data(text.utf8))
+  }
+
   // MARK: Schema
 
   private func migrate() throws {
@@ -141,6 +208,10 @@ public final class Store: @unchecked Sendable {
         pid INTEGER NOT NULL, started_at REAL NOT NULL, harness TEXT NOT NULL,
         session_id TEXT NOT NULL, project_root TEXT NOT NULL,
         PRIMARY KEY (pid, started_at));
+      CREATE TABLE IF NOT EXISTS requests (
+        id TEXT PRIMARY KEY, created_at REAL NOT NULL, requester_harness TEXT,
+        requester_id TEXT, reason TEXT NOT NULL, targets TEXT NOT NULL, status TEXT NOT NULL,
+        decided_at REAL, outcome TEXT);
       CREATE TABLE IF NOT EXISTS activity (
         pid INTEGER NOT NULL, started_at REAL NOT NULL, last_busy_at REAL NOT NULL,
         PRIMARY KEY (pid, started_at));
