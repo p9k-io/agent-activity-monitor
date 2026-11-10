@@ -4,7 +4,7 @@ import Foundation
 public enum Format {
   /// The time between two moments in its two largest units: `3d 4h`, `2h 5m`, `7m`, `40s`.
   public static func span(from start: Date, to end: Date) -> String {
-    let seconds = max(0, Int(end.timeIntervalSince(start)))
+    let seconds = whole(end.timeIntervalSince(start))
     let (days, hours, minutes) = (seconds / 86_400, seconds % 86_400 / 3600, seconds % 3600 / 60)
     if days > 0 { return "\(days)d \(hours)h" }
     if hours > 0 { return "\(hours)h \(minutes)m" }
@@ -23,12 +23,21 @@ public enum Format {
   /// CPU time in hours and minutes. Hours are not turned into days: several cores can use
   /// more CPU time than the clock shows.
   public static func cpuTime(_ seconds: Double) -> String {
-    let whole = max(0, Int(seconds))
+    let whole = whole(seconds)
     let (hours, minutes) = (whole / 3600, whole % 3600 / 60)
     if hours > 0 { return "\(hours)h \(minutes)m" }
     if minutes > 0 { return "\(minutes)m" }
     return "\(whole)s"
   }
+
+  /// Whole seconds between nothing and a hundred years. A time read from a file can be
+  /// anything, and a number too large for an integer must not end the program.
+  private static func whole(_ seconds: Double) -> Int {
+    guard seconds.isFinite else { return seconds == .infinity ? longest : 0 }
+    return Int(min(max(0, seconds), Double(longest)))
+  }
+
+  private static let longest = 100 * 365 * 86_400
 
   public static func memory(_ bytes: UInt64) -> String {
     ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: .memory)
@@ -76,6 +85,7 @@ extension CleanupPlan.Reason {
     case .notYours: "it belongs to another user"
     case .protected: "it must never be ended"
     case .zombie: "it has ended already and waits to be collected by its parent"
+    case .unattributed: "it belongs to no Project or Session"
     }
   }
 }
@@ -84,7 +94,7 @@ extension CleanupRequest.Outcome {
   /// What a Cleanup did, as the numbers that are not zero.
   public var text: String {
     let parts = [
-      (ended, "exited"), (killed, "ended by force"), (survived, "still running"),
+      (ended, "exited"), (endedByForce, "ended by force"), (survived, "still running"),
       (refused, "left alone"),
     ]
     .filter { $0.0 > 0 }

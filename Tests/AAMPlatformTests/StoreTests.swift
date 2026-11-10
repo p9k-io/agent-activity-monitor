@@ -1,6 +1,7 @@
 import AAMCore
 import AAMPlatform
 import Foundation
+import SQLite3
 import Testing
 
 struct StoreTests {
@@ -103,7 +104,7 @@ struct StoreTests {
     var decided = request("a")
     decided.status = .done
     decided.decidedAt = epoch.addingTimeInterval(60)
-    decided.outcome = CleanupRequest.Outcome(ended: 2, killed: 1, survived: 0, refused: 0)
+    decided.outcome = CleanupRequest.Outcome(ended: 2, endedByForce: 1, survived: 0, refused: 0)
 
     try store.update(decided)
 
@@ -223,5 +224,38 @@ struct StoreTests {
     #expect(report.rows.map(\.title) == ["Fix login", "Not tied to one Session"])
     #expect(report.rows.map(\.cpuSeconds) == [30, 12])
     #expect(report.rows.first?.peakResidentBytes == 700)
+  }
+
+  // MARK: Schema version
+
+  @Test func `a store written by a newer version of the app is refused, not rewritten`() throws {
+    _ = try Store(url: url)
+    try pragma("user_version = \(Store.schemaVersion + 1)")
+
+    #expect(throws: StoreError.self) {
+      try Store(url: url)
+    }
+  }
+
+  @Test func `a new store is marked with the version of its schema`() throws {
+    _ = try Store(url: url)
+
+    #expect(try pragma("user_version") == Store.schemaVersion)
+  }
+
+  struct Unreadable: Error {}
+
+  /// Runs a pragma on the store's file directly and returns the number it answers with.
+  @discardableResult
+  func pragma(_ text: String) throws -> Int {
+    var database: OpaquePointer?
+    guard sqlite3_open(url.path, &database) == SQLITE_OK else { throw Unreadable() }
+    defer { sqlite3_close(database) }
+    var statement: OpaquePointer?
+    guard sqlite3_prepare_v2(database, "PRAGMA \(text)", -1, &statement, nil) == SQLITE_OK else {
+      throw Unreadable()
+    }
+    defer { sqlite3_finalize(statement) }
+    return sqlite3_step(statement) == SQLITE_ROW ? Int(sqlite3_column_int64(statement, 0)) : 0
   }
 }

@@ -26,12 +26,13 @@ public struct Observer: Sendable {
     source: any ProcessSource,
     adapters: [any HarnessAdapter],
     linkers: [any InducedLoadLinker] = [],
-    projects: any ProjectResolver = DirectoryAsProject()
+    projects: any ProjectResolver = DirectoryAsProject(),
+    home: String? = nil
   ) {
     self.source = source
     self.adapters = adapters
     self.linkers = linkers
-    attributor = Attributor(projects: projects)
+    attributor = Attributor(projects: projects, home: home)
   }
 
   /// - Parameter memory: What earlier looks found. It lets a process be attributed after the

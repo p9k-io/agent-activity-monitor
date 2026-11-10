@@ -277,7 +277,17 @@ public final class Store: @unchecked Sendable {
 
   // MARK: Schema
 
+  /// The version of the tables this code reads and writes. A change to them raises it and
+  /// adds a step here that brings an older file up to date.
+  public static let schemaVersion = 1
+
   private func migrate() throws {
+    var found: Int64 = 0
+    try rows("PRAGMA user_version") { found = $0.integer(0) }
+    guard found <= Int64(Self.schemaVersion) else {
+      throw StoreError(
+        description: "the store was written by a newer version of the app and is left alone")
+    }
     try execute(
       """
       CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -301,6 +311,7 @@ public final class Store: @unchecked Sendable {
         session_id TEXT NOT NULL, kind TEXT NOT NULL, cpu_seconds REAL NOT NULL,
         peak_rss INTEGER NOT NULL,
         PRIMARY KEY (minute, project_root, harness, session_id, kind));
+      PRAGMA user_version = \(Self.schemaVersion);
       """)
   }
 

@@ -18,7 +18,7 @@ struct SystemParts {
     observer = Observer(
       source: source, adapters: adapters,
       linkers: [SimulatorLinker(), WebContentLinker(), VirtualMachineLinker()],
-      projects: projects)
+      projects: projects, home: home.path)
   }
 }
 

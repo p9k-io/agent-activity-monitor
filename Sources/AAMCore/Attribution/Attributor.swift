@@ -6,14 +6,20 @@
 public struct Attributor: Sendable {
   private let classifier: ProcessClassifier
   private let projects: any ProjectResolver
+  private let home: String?
 
-  /// - Parameter projects: Decides the Project of a marked process whose Session nobody saw.
+  /// - Parameters:
+  ///   - projects: Decides the Project of a marked process whose Session nobody saw.
+  ///   - home: The person's home directory. Nothing is inferred into it or into what is above
+  ///     it, however a Session came to work there.
   public init(
     classifier: ProcessClassifier = .standard,
-    projects: any ProjectResolver = DirectoryAsProject()
+    projects: any ProjectResolver = DirectoryAsProject(),
+    home: String? = nil
   ) {
     self.classifier = classifier
     self.projects = projects
+    self.home = home
   }
 
   public func inventory(
@@ -24,7 +30,8 @@ public struct Attributor: Sendable {
     let tree = ProcessTree(snapshot.processes)
     // A Session whose root is gone, or whose identifier now belongs to another process, is over.
     let live = sessions.filter { tree.process($0.root.pid)?.key == $0.root }
-    var sorter = Sorter(live: live, memory: memory, tree: tree, classifier: classifier)
+    var sorter = Sorter(
+      live: live, memory: memory, tree: tree, classifier: classifier, home: home)
 
     var pending: [ProcessRecord] = []
     for process in snapshot.processes where !sorter.attribute(process, projects: projects) {
@@ -61,7 +68,11 @@ private struct Sorter {
   private let ownerByRoot: [Int32: SessionID]
   private let liveByMarker: [Marker: SessionID]
   private let pastByMarker: [Marker: SessionID]
-  /// Roots of the Projects that have or had Sessions, longest first.
+  /// Earlier identifiers of live Sessions. A Session whose root process reports another
+  /// identifier than before, as after starting over, is still the same Session.
+  private let renamed: [SessionID: SessionID]
+  /// Roots of the Projects that have or had Sessions, longest first, without those too wide
+  /// to infer anything from.
   private let knownRoots: [String]
 
   private var owned: [SessionID: [AttributedProcess]] = [:]
@@ -70,33 +81,62 @@ private struct Sorter {
   /// The tree owner of each process looked at so far; nil inside means none.
   private var treeOwners: [Int32: SessionID?] = [:]
 
-  init(live: [Session], memory: Memory, tree: ProcessTree, classifier: ProcessClassifier) {
+  init(
+    live: [Session], memory: Memory, tree: ProcessTree, classifier: ProcessClassifier,
+    home: String?
+  ) {
     self.live = live
     self.memory = memory
     self.tree = tree
     self.classifier = classifier
-    liveByID = Dictionary(live.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    let liveByID = Dictionary(live.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    self.liveByID = liveByID
     ownerByRoot = Dictionary(
       live.map { ($0.root.pid, $0.id) }, uniquingKeysWith: { first, _ in first })
 
+    var renamed: [SessionID: SessionID] = [:]
+    for session in live {
+      if let before = memory.lineage[session.root]?.session, before != session.id,
+        liveByID[before] == nil
+      {
+        renamed[before] = session.id
+      }
+    }
+    self.renamed = renamed
+
     var liveMarkers: [Marker: SessionID] = [:]
+    var pastMarkers: [Marker: SessionID] = [:]
+    for (id, session) in memory.sessions where liveByID[id] == nil {
+      for (name, value) in session.markers {
+        // What an earlier identifier marked belongs to the Session that carries on.
+        if let now = renamed[id] {
+          liveMarkers[Marker(name: name, value: value)] = now
+        } else {
+          pastMarkers[Marker(name: name, value: value)] = id
+        }
+      }
+    }
     for session in live {
       for (name, value) in session.markers {
         liveMarkers[Marker(name: name, value: value)] = session.id
       }
     }
     liveByMarker = liveMarkers
-
-    var pastMarkers: [Marker: SessionID] = [:]
-    for (id, session) in memory.sessions where liveByID[id] == nil {
-      for (name, value) in session.markers {
-        pastMarkers[Marker(name: name, value: value)] = id
-      }
-    }
     pastByMarker = pastMarkers
 
     let roots = Set(live.map(\.project.root)).union(memory.sessions.values.map(\.project.root))
-    knownRoots = roots.sorted { $0.count > $1.count }
+    knownRoots =
+      roots
+      .filter { !Self.isTooWide($0, home: home) }
+      .sorted { $0.count > $1.count }
+  }
+
+  /// The root of the disk, the home directory and what is above it hold nearly everything a
+  /// person runs. A Session that worked there says nothing about a daemon found there.
+  private static func isTooWide(_ root: String, home: String?) -> Bool {
+    if root == "/" { return true }
+    guard let home else { return false }
+    return home == root || home.hasPrefix(root + "/")
   }
 
   /// Attributes `process` when there is Evidence for it. Returns whether it was attributed.
@@ -106,8 +146,9 @@ private struct Sorter {
     } else if let owner = marker(of: process, in: liveByMarker) {
       own(process, by: owner, evidence: .tagged)
     } else if let lineage = memory.lineage[process.key] {
-      if liveByID[lineage.session] != nil {
-        own(process, by: lineage.session, evidence: .remembered)
+      let owner = renamed[lineage.session] ?? lineage.session
+      if liveByID[owner] != nil {
+        own(process, by: owner, evidence: .remembered)
       } else {
         orphan(process, in: lineage.project, evidence: .remembered, from: lineage.session)
       }
@@ -133,6 +174,13 @@ private struct Sorter {
   mutating func inherit(_ process: ProcessRecord) -> Bool {
     for ancestor in tree.ancestors(of: process.pid) {
       guard let found = looseByPID[ancestor.pid] else { continue }
+      // An inference reaches only as far as its reasons do: what runs on a terminal or in
+      // another directory may be a person's own work, whatever started it.
+      if found.attributed.evidence == .inferred {
+        let inside =
+          process.workingDirectory.map { Self.directory($0, isIn: found.project.root) } ?? true
+        guard !process.hasTerminal, inside else { return false }
+      }
       place(
         AttributedProcess(
           process: process,
@@ -215,8 +263,12 @@ private struct Sorter {
 
   private func knownProject(containing directory: String) -> Project? {
     knownRoots
-      .first { directory == $0 || directory.hasPrefix($0 + "/") }
+      .first { Self.directory(directory, isIn: $0) }
       .map(Project.init(root:))
+  }
+
+  private static func directory(_ directory: String, isIn root: String) -> Bool {
+    directory == root || directory.hasPrefix(root + "/")
   }
 
   // MARK: Placement

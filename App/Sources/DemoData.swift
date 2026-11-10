@@ -201,7 +201,7 @@
           id: "demo0001", createdAt: now - 7200, requester: checkout,
           reason: "The test run is over, its watcher can go.", targets: target(100_104),
           status: .done, decidedAt: now - 7000,
-          outcome: CleanupRequest.Outcome(ended: 3, killed: 0, survived: 0, refused: 0)),
+          outcome: CleanupRequest.Outcome(ended: 3, endedByForce: 0, survived: 0, refused: 0)),
         CleanupRequest(
           id: "demo0002", createdAt: now - 5400, requester: nil,
           reason: "Free memory before the build.", targets: target(100_300), status: .denied,

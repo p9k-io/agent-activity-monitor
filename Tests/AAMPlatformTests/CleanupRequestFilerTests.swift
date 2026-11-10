@@ -59,6 +59,41 @@ struct CleanupRequestFilerTests {
     #expect(filed.refused.map(\.reason) == [.gone])
   }
 
+  @Test func `a process that belongs to no Project or Session cannot be asked for`() throws {
+    // Anything of the person's own: a browser, a virtual machine, the login window.
+    let filed = try filer().file(pids: [101, 900], reason: "", in: reading, caller: 102)
+
+    #expect(filed.request.targets == [server.key])
+    #expect(
+      filed.refused == [CleanupPlan.Refusal(process: stranger.key, reason: .unattributed)])
+    #expect(throws: CleanupRequestFiler.Refusal.nothingToAsk([.unattributed])) {
+      try filer().file(pids: [900], reason: "heating the machine", in: reading, caller: 102)
+    }
+  }
+
+  @Test func `who asks is told by the process tree alone, not by what a process says of itself`()
+    throws
+  {
+    // Outside the Session's tree, but carrying the marker of the Session.
+    let impostor = ProcessRecord(
+      pid: 950, parentPID: 1, groupID: 950, userID: 501, startedAt: epoch,
+      executablePath: "/opt/bin/aam", arguments: [], workingDirectory: nil, cpuTime: .zero,
+      residentBytes: 0, isZombie: false, hasTerminal: true, markers: ["ID": "s-100"])
+    let snapshot = Snapshot.of(root, server, impostor)
+    let session = Session(
+      id: SessionID(harness: .claudeCode, value: "s-100"), root: root.key,
+      project: Project(root: "/work/alpha"), workingDirectory: "/work/alpha", title: nil,
+      state: .idle, lastActivityAt: nil, resumeCommand: nil, markers: ["ID": "s-100"])
+    let reading = Reading(
+      snapshot: snapshot, sessions: [session],
+      inventory: Attributor().inventory(of: snapshot, sessions: [session]))
+
+    let filed = try filer().file(pids: [101], reason: "", in: reading, caller: 950)
+
+    #expect(reading.inventory.session(owning: 950)?.session.id == session.id)
+    #expect(filed.request.requester == nil)
+  }
+
   @Test func `a request with nothing left to ask for is refused and not stored`() throws {
     // Seen by a user who owns none of the processes.
     let foreign = CleanupRequestFiler(store: store, ownUser: 0)

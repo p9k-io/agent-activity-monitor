@@ -72,7 +72,7 @@ codex mcp add aam -- aam mcp     # Codex CLI
 | `request_cleanup` | Files a Cleanup request for a person to decide in the app. |
 | `get_request` | What was decided about a Cleanup request. |
 
-None of them ends a process. At most 50 requests wait for a decision at a time, and a request names at most 100 processes.
+None of them ends a process. A request can name only what belongs to a Project or a Session: a browser, a virtual machine or anything else of your own is refused. At most 50 requests wait for a decision at a time, and a request names at most 100 processes.
 
 ## Cleanup
 
@@ -87,7 +87,7 @@ Nothing is ended without a dialog that lists it first. The dialog shows every pr
 
 ![The dialog that asks before a Session is ended](docs/images/cleanup-dialog.png)
 
-Each process is asked to exit. What has not exited after 5 seconds is ended by force. Only your own processes can be ended, never the app itself or what it runs under, and a process identifier that now belongs to another process is never touched.
+Each process is asked to exit. What has not exited after 5 seconds is ended by force. Exactly what the dialog listed is ended: a process started after the dialog opened is left running and shows up as left behind later. Only your own processes can be ended, never the app itself or what it runs under, and a process identifier that now belongs to another process is never touched.
 
 ## Principles
 

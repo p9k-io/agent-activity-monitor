@@ -128,7 +128,7 @@ struct CommandLineTests {
       id: "abc12345", createdAt: Date(), requester: nil, reason: "x", targets: [])
     request.status = .done
     request.decidedAt = Date()
-    request.outcome = CleanupRequest.Outcome(ended: 3, killed: 0, survived: 0, refused: 0)
+    request.outcome = CleanupRequest.Outcome(ended: 3, endedByForce: 0, survived: 0, refused: 0)
     let connection = try Store(url: store)
     try connection.add(request)
     try connection.update(request)

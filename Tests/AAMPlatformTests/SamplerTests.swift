@@ -138,6 +138,21 @@ struct SamplerTests {
     #expect(report.rows.count == 1)
   }
 
+  @Test func `without a store, history does not pile up in memory`() async {
+    let (sampler, _) = sampler(
+      [
+        snapshot(after: 0, process(100, path: "/opt/bin/claude", cpu: 0)),
+        snapshot(after: 10, process(100, path: "/opt/bin/claude", cpu: 4)),
+        snapshot(after: 80, process(100, path: "/opt/bin/claude", cpu: 30)),
+      ], saveEvery: 1)
+
+    for _ in 0..<3 {
+      _ = await sampler.tick()
+    }
+
+    #expect(await sampler.historyBacklog == 0)
+  }
+
   @Test func `changing the thresholds changes what is Stale`() async {
     let claude = process(100, path: "/opt/bin/claude", cpu: 0)
     let adapter = ClaudeLike(state: .idle, lastActivityAt: epoch.addingTimeInterval(-7200))

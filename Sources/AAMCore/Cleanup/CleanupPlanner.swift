@@ -11,6 +11,8 @@ public struct CleanupPlan: Sendable, Equatable {
     case protected
     /// The process has ended already and only waits to be collected by its parent.
     case zombie
+    /// The process belongs to no Project or Session, so nobody can ask for it.
+    case unattributed
   }
 
   public struct Refusal: Sendable, Equatable {

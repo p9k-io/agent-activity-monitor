@@ -333,6 +333,16 @@ struct CleanupProposerTests {
     #expect(proposal.resume.isEmpty)
   }
 
+  @Test func `a request for what belongs to no Project or Session says so`() {
+    let other = ProcessRecord.make(901, path: "/usr/libexec/another")
+
+    let one = proposer([bystander]).answering(request([bystander]))
+    let two = proposer([bystander, other]).answering(request([bystander, other]))
+
+    #expect(one.cautions == ["1 of these processes belongs to no Project or Session."])
+    #expect(two.cautions == ["2 of these processes belong to no Project or Session."])
+  }
+
   @Test func `a request whose processes are gone has nothing left to end`() {
     let proposal = proposer([bystander]).answering(request([server]))
 

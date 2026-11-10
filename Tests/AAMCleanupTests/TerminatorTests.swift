@@ -26,7 +26,7 @@ struct TerminatorTests {
     let result = await terminator().end([key])
 
     #expect(result.ended == [key])
-    #expect(result.killed.isEmpty)
+    #expect(result.endedByForce.isEmpty)
     #expect(result.survived.isEmpty)
     await helper.exit()
     #expect(helper.process.terminationReason == .uncaughtSignal)
@@ -37,33 +37,65 @@ struct TerminatorTests {
     async throws
   {
     let helper = try Helper.start("ignore-term")
-    defer { kill(helper.pid, SIGKILL) }
     // Give the helper a moment to start ignoring the signal.
     try await Task.sleep(for: .milliseconds(300))
     let key = try key(of: helper)
+    defer { stop(key) }
 
     let result = await terminator(grace: .milliseconds(400)).end([key])
 
     #expect(result.ended.isEmpty)
-    #expect(result.killed == [key])
+    #expect(result.endedByForce == [key])
     await helper.exit()
     #expect(helper.process.terminationStatus == SIGKILL)
   }
 
-  @Test func `what the target started ends with it`() async throws {
+  /// The process `helper` started, once it is there.
+  func child(of helper: RunningHelper) async throws -> ProcessRecord {
+    for _ in 0..<30 {
+      if let child = source.snapshot(refreshingOtherUsers: false).processes
+        .first(where: { $0.parentPID == helper.pid })
+      {
+        return child
+      }
+      try await Task.sleep(for: .milliseconds(100))
+    }
+    throw Missing()
+  }
+
+  struct Missing: Error {}
+
+  /// Ends a process a test started, and only if it is still that process.
+  func stop(_ key: ProcessRecord.Key) {
+    if source.record(for: key.pid)?.key == key {
+      kill(key.pid, SIGKILL)
+    }
+  }
+
+  @Test func `a target and what it started end when both were confirmed`() async throws {
     let helper = try Helper.start("tree")
     defer { helper.process.terminate() }
-    try await Task.sleep(for: .milliseconds(300))
     let parent = try key(of: helper)
-    let child = try #require(
-      source.snapshot(refreshingOtherUsers: false).processes
-        .first { $0.parentPID == helper.pid })
-    defer { kill(child.pid, SIGKILL) }
+    let child = try await child(of: helper)
+    defer { stop(child.key) }
 
-    let result = await terminator().end([parent])
+    let result = await terminator().end([parent, child.key])
 
     #expect(Set(result.ended) == [parent, child.key])
     #expect(source.record(for: child.pid).map { !$0.isZombie } != true)
+  }
+
+  @Test func `what was not confirmed is left running, whatever started it`() async throws {
+    let helper = try Helper.start("tree")
+    defer { helper.process.terminate() }
+    let parent = try key(of: helper)
+    let child = try await child(of: helper)
+    defer { stop(child.key) }
+
+    let result = await terminator().end([parent])
+
+    #expect(result.ended == [parent])
+    #expect(source.record(for: child.pid)?.key == child.key)
   }
 
   @Test func `an identifier that no longer names the same process is never signalled`()
@@ -95,11 +127,12 @@ struct CleanupResultTests {
     let key = ProcessRecord.Key(pid: 10, startedAt: Date(timeIntervalSince1970: 0))
     var result = CleanupResult()
     result.ended = [key, key, key]
-    result.killed = [key, key]
+    result.endedByForce = [key, key]
     result.survived = [key]
     result.refused = [CleanupPlan.Refusal(process: key, reason: .gone)]
 
-    #expect(result.outcome == CleanupRequest.Outcome(ended: 3, killed: 2, survived: 1, refused: 1))
+    #expect(
+      result.outcome == CleanupRequest.Outcome(ended: 3, endedByForce: 2, survived: 1, refused: 1))
   }
 
   @Test func `the Terminator plans with the rules it ends by`() throws {

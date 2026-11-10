@@ -196,6 +196,18 @@ struct StalenessRulesTests {
     #expect(finding.processes.map(\.pid) == [700])
   }
 
+  @Test func `a forgotten virtual machine is shown but cannot be cleaned up`() throws {
+    // Ending a virtual machine ends every container in it.
+    let machine = ProcessRecord.make(
+      710, path: "/usr/libexec/com.apple.Virtualization.VirtualMachine", cwd: "/work/alpha")
+
+    let finding = try #require(
+      findings([root, machine], sessions: [session(.idle, active: ago(hours: 3))]).first)
+
+    #expect(finding.kind == .forgottenInducedLoad)
+    #expect(!finding.canCleanUp)
+  }
+
   @Test(arguments: [
     (SessionState.working, 30.0),
     (.idle, 1.0),

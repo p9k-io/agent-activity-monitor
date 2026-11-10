@@ -13,6 +13,16 @@ struct PresentationTests {
     #expect(Format.span(from: epoch, to: epoch.addingTimeInterval(seconds)) == expected)
   }
 
+  @Test func `a time that cannot be real does not break the wording`() {
+    let absurd = Date(timeIntervalSince1970: 1e300)
+
+    #expect(Format.span(from: epoch, to: absurd) == "36500d 0h")
+    #expect(Format.span(from: absurd, to: epoch) == "0s")
+    #expect(Format.cpuTime(1e300) == "876000h 0m")
+    #expect(Format.cpuTime(-.infinity) == "0s")
+    #expect(Format.cpuTime(.nan) == "0s")
+  }
+
   @Test func `a span that would run backwards is zero`() {
     #expect(Format.span(from: epoch.addingTimeInterval(10), to: epoch) == "0s")
   }
@@ -45,13 +55,16 @@ struct PresentationTests {
   }
 
   @Test(arguments: [
-    (CleanupRequest.Outcome(ended: 5, killed: 0, survived: 0, refused: 0), "5 exited."),
+    (CleanupRequest.Outcome(ended: 5, endedByForce: 0, survived: 0, refused: 0), "5 exited."),
     (
-      CleanupRequest.Outcome(ended: 5, killed: 1, survived: 2, refused: 3),
+      CleanupRequest.Outcome(ended: 5, endedByForce: 1, survived: 2, refused: 3),
       "5 exited, 1 ended by force, 2 still running, 3 left alone."
     ),
-    (CleanupRequest.Outcome(ended: 0, killed: 0, survived: 0, refused: 2), "2 left alone."),
-    (CleanupRequest.Outcome(ended: 0, killed: 0, survived: 0, refused: 0), "Nothing was ended."),
+    (CleanupRequest.Outcome(ended: 0, endedByForce: 0, survived: 0, refused: 2), "2 left alone."),
+    (
+      CleanupRequest.Outcome(ended: 0, endedByForce: 0, survived: 0, refused: 0),
+      "Nothing was ended."
+    ),
   ])
   func `what a Cleanup did is told in the numbers that are not zero`(
     outcome: CleanupRequest.Outcome, expected: String
