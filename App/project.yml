@@ -11,10 +11,6 @@ options:
 packages:
   AAM:
     path: ..
-  # Looks for updates and installs them. The only reason the app uses the network.
-  Sparkle:
-    url: https://github.com/sparkle-project/Sparkle
-    exactVersion: 2.10.1
 
 targets:
   AgentActivityMonitor:
@@ -30,7 +26,9 @@ targets:
       # Ends processes. Only the app links it (docs/adr/0001).
       - package: AAM
         product: AAMCleanup
-      - package: Sparkle
+      # Looks for updates and installs them. The only reason the app uses the network.
+      - package: AAM
+        product: AAMUpdates
     scheme: {}
     settings:
       base:

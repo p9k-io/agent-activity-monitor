@@ -14,10 +14,14 @@ let package = Package(
     .library(name: "AAMCore", targets: ["AAMCore"]),
     .library(name: "AAMPlatform", targets: ["AAMPlatform"]),
     .library(name: "AAMCleanup", targets: ["AAMCleanup"]),
+    .library(name: "AAMUpdates", targets: ["AAMUpdates"]),
     .executable(name: "aam", targets: ["aam"]),
   ],
   dependencies: [
-    .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2")
+    .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2"),
+    // Declared here, not in the app's project, so that the package and the app share one
+    // Package.resolved instead of each rewriting the other's.
+    .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.1"),
   ],
   targets: [
     .target(name: "AAMCore", swiftSettings: settings),
@@ -26,6 +30,10 @@ let package = Package(
     // end anything (docs/adr/0001).
     .target(
       name: "AAMCleanup", dependencies: ["AAMCore", "AAMPlatform"], swiftSettings: settings),
+    // Looks for updates and installs them. Only the app links it.
+    .target(
+      name: "AAMUpdates", dependencies: [.product(name: "Sparkle", package: "Sparkle")],
+      swiftSettings: settings),
     .executableTarget(
       name: "aam",
       dependencies: [

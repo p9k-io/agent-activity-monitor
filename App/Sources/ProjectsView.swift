@@ -55,11 +55,10 @@ private struct SessionRow: View {
         VStack(alignment: .leading, spacing: 1) {
           Text(group.session.displayTitle)
             .lineLimit(1)
-          Text(
-            "\(group.session.id.harness.label) · last active \(group.session.lastActive(now: model.now))"
-          )
-          .font(.caption)
-          .foregroundStyle(.secondary)
+          Text(verbatim: detail)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
         }
         Spacer()
         StateBadge(state: group.session.state)
@@ -80,12 +79,29 @@ private struct SessionRow: View {
           .accessibilityIdentifier("session.end")
       }
       .contextMenu {
+        if let place = model.place(of: group.session.id) {
+          Button("Show in \(place.host)") { model.show(place) }
+        }
         Button("End Session…") { model.propose { $0.ending(group.session.id) } }
         if let command = group.session.resumeCommand {
           Button("Copy Resume Command") { Pasteboard.copy(command) }
         }
       }
     }
+  }
+}
+
+extension SessionRow {
+  /// The Harness, when the Session was last active and where its terminal is.
+  fileprivate var detail: String {
+    var parts = [
+      group.session.id.harness.label,
+      "last active \(group.session.lastActive(now: model.now))",
+    ]
+    if let place = model.place(of: group.session.id) {
+      parts.append(place.label)
+    }
+    return parts.joined(separator: " · ")
   }
 }
 

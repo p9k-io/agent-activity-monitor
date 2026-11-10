@@ -81,7 +81,7 @@ Nothing is ended without a dialog that lists it first. The dialog shows every pr
 ![Stale: what is no longer needed, and why](docs/images/stale.png)
 
 - **Stale** offers a Cleanup for each finding, or for all of them at once.
-- **Projects** ends a Session with everything attributed to it and gives you the command that reopens it.
+- **Projects** ends a Session with everything attributed to it and gives you the command that reopens it. Each Session says which application its terminal runs in; in cmux it also names the workspace and the panel, and `Show in cmux` brings that panel to the front.
 - **Overview** shuts a simulator down with Xcode's own tool and ends the web content of an application. Virtual machines and system processes are only shown.
 - **Requests** lists what Sessions and scripts asked for. Approve or deny each one.
 

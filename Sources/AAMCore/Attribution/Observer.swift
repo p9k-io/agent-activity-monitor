@@ -6,11 +6,17 @@ public struct Reading: Sendable, Equatable {
   public let snapshot: Snapshot
   public let sessions: [Session]
   public let inventory: Inventory
+  /// Where each Session's terminal lives, for the Sessions whose Host could be told.
+  public let places: [SessionID: HostPlace]
 
-  public init(snapshot: Snapshot, sessions: [Session], inventory: Inventory) {
+  public init(
+    snapshot: Snapshot, sessions: [Session], inventory: Inventory,
+    places: [SessionID: HostPlace] = [:]
+  ) {
     self.snapshot = snapshot
     self.sessions = sessions
     self.inventory = inventory
+    self.places = places
   }
 }
 
@@ -20,18 +26,21 @@ public struct Observer: Sendable {
   private let source: any ProcessSource
   private let adapters: [any HarnessAdapter]
   private let linkers: [any InducedLoadLinker]
+  private let hosts: [any HostAdapter]
   private let attributor: Attributor
 
   public init(
     source: any ProcessSource,
     adapters: [any HarnessAdapter],
     linkers: [any InducedLoadLinker] = [],
+    hosts: [any HostAdapter] = [],
     projects: any ProjectResolver = DirectoryAsProject(),
     home: String? = nil
   ) {
     self.source = source
     self.adapters = adapters
     self.linkers = linkers
+    self.hosts = hosts
     attributor = Attributor(projects: projects, home: home)
   }
 
@@ -44,10 +53,15 @@ public struct Observer: Sendable {
   /// Sorts a snapshot that was taken already.
   public func observe(_ snapshot: Snapshot, remembering memory: Memory = .empty) -> Reading {
     let sessions = adapters.flatMap { $0.sessions(in: snapshot) }
+    var places = HostFinder.places(of: sessions, in: ProcessTree(snapshot.processes))
+    for host in hosts {
+      places = host.refine(places, sessions: sessions)
+    }
     return Reading(
       snapshot: snapshot,
       sessions: sessions,
-      inventory: attributor.inventory(of: snapshot, sessions: sessions, memory: memory)
+      inventory: attributor.inventory(of: snapshot, sessions: sessions, memory: memory),
+      places: places
     )
   }
 

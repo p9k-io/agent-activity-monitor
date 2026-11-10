@@ -12,6 +12,7 @@ A native macOS app, a command line tool (`aam`) and an MCP server that show whic
 - `Sources/AAMCore/`: the domain with no I/O. Model, Attribution, Stale rules, Culprit ranking, Cleanup proposals, history and reports.
 - `Sources/AAMPlatform/`: macOS adapters. Process sources, Harness adapters, Host adapters, the store, the Sampler, the MCP server.
 - `Sources/AAMCleanup/`: the only code that ends processes. Only the app links it.
+- `Sources/AAMUpdates/`: updates through Sparkle. Only the app links it. Sparkle is declared in `Package.swift`, not in the app's project, so that there is one `Package.resolved`.
 - `Sources/aam/`: the command line tool, including `aam mcp`.
 - `App/`: the SwiftUI app. `App/project.yml` is an XcodeGen spec; the Xcode project is generated and not committed. The app holds views and their model only; anything worth a test belongs in the package.
 - `Tests/`: Swift Testing suites with synthetic fixtures.
