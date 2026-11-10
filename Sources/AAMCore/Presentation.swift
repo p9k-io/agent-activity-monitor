@@ -20,6 +20,16 @@ public enum Format {
     return "\(number) %"
   }
 
+  /// CPU time in hours and minutes. Hours are not turned into days: several cores can use
+  /// more CPU time than the clock shows.
+  public static func cpuTime(_ seconds: Double) -> String {
+    let whole = max(0, Int(seconds))
+    let (hours, minutes) = (whole / 3600, whole % 3600 / 60)
+    if hours > 0 { return "\(hours)h \(minutes)m" }
+    if minutes > 0 { return "\(minutes)m" }
+    return "\(whole)s"
+  }
+
   public static func memory(_ bytes: UInt64) -> String {
     ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: .memory)
   }

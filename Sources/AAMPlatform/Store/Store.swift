@@ -186,6 +186,87 @@ public final class Store: @unchecked Sendable {
     }
   }
 
+  // MARK: History
+
+  /// Adds CPU time to what is recorded for the same minute, Session and kind of process, and
+  /// keeps the larger of the two peaks.
+  public func record(_ buckets: [HistoryBucket]) throws {
+    guard !buckets.isEmpty else { return }
+    try locked {
+      try execute("BEGIN IMMEDIATE")
+      do {
+        for bucket in buckets {
+          try run(
+            """
+            INSERT INTO history VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (minute, project_root, harness, session_id, kind) DO UPDATE SET
+              cpu_seconds = cpu_seconds + excluded.cpu_seconds,
+              peak_rss = max(peak_rss, excluded.peak_rss)
+            """,
+            .date(bucket.minute), .text(bucket.project.root),
+            .text(bucket.session?.harness.rawValue ?? ""), .text(bucket.session?.value ?? ""),
+            .text(bucket.kind.rawValue), .real(bucket.cpuSeconds),
+            .integer(Int64(clamping: bucket.peakResidentBytes)))
+        }
+        try execute("COMMIT")
+      } catch {
+        try? execute("ROLLBACK")
+        throw error
+      }
+    }
+  }
+
+  /// The CPU time used since `start`, per Session and kind of process.
+  public func usageTotals(since start: Date) throws -> [UsageTotal] {
+    try locked {
+      var totals: [UsageTotal] = []
+      try rows(
+        """
+        SELECT project_root, harness, session_id, kind, SUM(cpu_seconds) FROM history
+        WHERE minute >= ? GROUP BY project_root, harness, session_id, kind
+        ORDER BY project_root, harness, session_id, kind
+        """, .date(start)
+      ) { row in
+        totals.append(
+          UsageTotal(
+            project: Project(root: row.text(0)), session: row.session(1, 2),
+            kind: ProcessKind(rawValue: row.text(3)) ?? .other, cpuSeconds: row.double(4)))
+      }
+      return totals
+    }
+  }
+
+  /// The most memory each Session held in one minute since `start`.
+  public func usagePeaks(since start: Date) throws -> [UsagePeak] {
+    try locked {
+      var peaks: [UsagePeak] = []
+      try rows(
+        """
+        SELECT project_root, harness, session_id, MAX(held) FROM (
+          SELECT project_root, harness, session_id, SUM(peak_rss) AS held FROM history
+          WHERE minute >= ? GROUP BY minute, project_root, harness, session_id)
+        GROUP BY project_root, harness, session_id ORDER BY project_root, harness, session_id
+        """, .date(start)
+      ) { row in
+        peaks.append(
+          UsagePeak(
+            project: Project(root: row.text(0)), session: row.session(1, 2),
+            residentBytes: UInt64(clamping: row.integer(3))))
+      }
+      return peaks
+    }
+  }
+
+  /// Drops history from before `cutoff`, and Cleanup requests decided before it. A request
+  /// that still waits for a decision is kept however old it is.
+  public func prune(before cutoff: Date) throws {
+    try locked {
+      try run("DELETE FROM history WHERE minute < ?", .date(cutoff))
+      try run(
+        "DELETE FROM requests WHERE status != 'pending' AND decided_at < ?", .date(cutoff))
+    }
+  }
+
   private func json(_ value: some Encodable) -> String {
     String(decoding: (try? JSONEncoder().encode(value)) ?? Data(), as: UTF8.self)
   }
@@ -215,6 +296,11 @@ public final class Store: @unchecked Sendable {
       CREATE TABLE IF NOT EXISTS activity (
         pid INTEGER NOT NULL, started_at REAL NOT NULL, last_busy_at REAL NOT NULL,
         PRIMARY KEY (pid, started_at));
+      CREATE TABLE IF NOT EXISTS history (
+        minute REAL NOT NULL, project_root TEXT NOT NULL, harness TEXT NOT NULL,
+        session_id TEXT NOT NULL, kind TEXT NOT NULL, cpu_seconds REAL NOT NULL,
+        peak_rss INTEGER NOT NULL,
+        PRIMARY KEY (minute, project_root, harness, session_id, kind));
       """)
   }
 
@@ -254,6 +340,21 @@ public final class Store: @unchecked Sendable {
       sqlite3_column_type(statement, column) == SQLITE_NULL ? nil : date(column)
     }
 
+    func double(_ column: Int32) -> Double {
+      sqlite3_column_double(statement, column)
+    }
+
+    func integer(_ column: Int32) -> Int64 {
+      sqlite3_column_int64(statement, column)
+    }
+
+    /// The Session in two columns, or nil when they are empty: what belongs to no Session.
+    func session(_ harness: Int32, _ id: Int32) -> SessionID? {
+      let value = text(id)
+      return value.isEmpty
+        ? nil : SessionID(harness: HarnessID(rawValue: text(harness)), value: value)
+    }
+
     func key(_ pid: Int32, _ startedAt: Int32) -> ProcessRecord.Key {
       ProcessRecord.Key(pid: sqlite3_column_int(statement, pid), startedAt: date(startedAt))
     }
@@ -275,8 +376,8 @@ public final class Store: @unchecked Sendable {
     guard sqlite3_step(statement) == SQLITE_DONE else { throw failure() }
   }
 
-  private func rows(_ sql: String, _ read: (Row) -> Void) throws {
-    let statement = try prepare(sql, [])
+  private func rows(_ sql: String, _ values: Value..., read: (Row) -> Void) throws {
+    let statement = try prepare(sql, values)
     defer { sqlite3_finalize(statement) }
     while true {
       switch sqlite3_step(statement) {

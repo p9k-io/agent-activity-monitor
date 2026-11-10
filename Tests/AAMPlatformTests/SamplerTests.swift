@@ -26,12 +26,12 @@ struct SamplerTests {
 
   func sampler(
     _ snapshots: [Snapshot], adapter: ClaudeLike = ClaudeLike(), store: Store? = nil,
-    refreshOthersEvery: Int = 6
+    refreshOthersEvery: Int = 6, saveEvery: Int = 6
   ) -> (Sampler, ScriptedSource) {
     let source = ScriptedSource(snapshots)
     let sampler = Sampler(
       source: source, observer: Observer(source: source, adapters: [adapter]), store: store,
-      ownUser: 501, refreshOthersEvery: refreshOthersEvery)
+      ownUser: 501, refreshOthersEvery: refreshOthersEvery, saveEvery: saveEvery)
     return (sampler, source)
   }
 
@@ -96,6 +96,23 @@ struct SamplerTests {
     _ = await sampler.tick()
 
     #expect(try Store(url: url).loadMemory().sessions.count == 1)
+  }
+
+  @Test func `the CPU time a Session used reaches the store`() async throws {
+    let url = scratch.url.appendingPathComponent("aam.sqlite")
+    let (sampler, _) = sampler(
+      [
+        snapshot(after: 0, process(100, path: "/opt/bin/claude", cpu: 0)),
+        snapshot(after: 10, process(100, path: "/opt/bin/claude", cpu: 4)),
+      ], store: try Store(url: url), saveEvery: 1)
+
+    _ = await sampler.tick()
+    _ = await sampler.tick()
+
+    let totals = try Store(url: url).usageTotals(since: epoch)
+    #expect(totals.map(\.kind) == [.harness])
+    #expect(totals.map(\.cpuSeconds) == [4])
+    #expect(totals.map(\.session) == [SessionID(harness: .claudeCode, value: "s-100")])
   }
 
   @Test func `changing the thresholds changes what is Stale`() async {
