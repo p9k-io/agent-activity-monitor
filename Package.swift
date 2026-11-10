@@ -33,7 +33,7 @@ let package = Package(
     .testTarget(name: "AAMCoreTests", dependencies: ["AAMCore"], swiftSettings: settings),
     .testTarget(
       name: "AAMPlatformTests",
-      dependencies: ["AAMCore", "AAMPlatform", "aam-test-helper"],
+      dependencies: ["AAMCore", "AAMPlatform", "aam", "aam-test-helper"],
       swiftSettings: settings
     ),
     // A process the tests may start, inspect and end. It is never shipped.
