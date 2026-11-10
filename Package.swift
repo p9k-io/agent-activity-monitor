@@ -31,5 +31,12 @@ let package = Package(
       swiftSettings: settings
     ),
     .testTarget(name: "AAMCoreTests", dependencies: ["AAMCore"], swiftSettings: settings),
+    .testTarget(
+      name: "AAMPlatformTests",
+      dependencies: ["AAMCore", "AAMPlatform", "aam-test-helper"],
+      swiftSettings: settings
+    ),
+    // A process the tests may start, inspect and end. It is never shipped.
+    .executableTarget(name: "aam-test-helper", path: "Tests/TestHelper", swiftSettings: settings),
   ]
 )

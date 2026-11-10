@@ -86,7 +86,8 @@ public struct Attributor: Sendable {
       .sorted { ($0.project.name, $0.project.root) < ($1.project.name, $1.project.root) }
   }
 
-  private func ordered(_ processes: [AttributedProcess], rootFirst root: Int32) -> [AttributedProcess]
+  private func ordered(_ processes: [AttributedProcess], rootFirst root: Int32)
+    -> [AttributedProcess]
   {
     processes.sorted { left, right in
       if left.process.pid == root { return true }

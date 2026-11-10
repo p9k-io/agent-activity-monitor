@@ -106,7 +106,8 @@ struct CulpritRankerTests {
 
   @Test func `unattributed processes of one application are one Culprit`() throws {
     let renderer = ProcessRecord.make(
-      30, path: "/Applications/Browser.app/Contents/Helpers/Browser Helper.app/Contents/MacOS/Helper")
+      30,
+      path: "/Applications/Browser.app/Contents/Helpers/Browser Helper.app/Contents/MacOS/Helper")
     let gpu = ProcessRecord.make(31, path: "/Applications/Browser.app/Contents/MacOS/Browser")
     let (inventory, usage) = measure([(renderer, 2), (gpu, 2)])
 
