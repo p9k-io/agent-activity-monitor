@@ -18,6 +18,7 @@ struct SystemParts {
     observer = Observer(
       source: source, adapters: adapters,
       linkers: [SimulatorLinker(), WebContentLinker(), VirtualMachineLinker()],
+      hosts: [CmuxHost()],
       projects: projects, home: home.path)
   }
 }

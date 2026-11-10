@@ -146,7 +146,19 @@
         Dictionary(uniqueKeysWithValues: zip(processes, rows).map { ($0.key, $1.cpu) }))
       let culprits = CulpritRanker().culprits(in: inventory, usage: usage, inducedLoad: load)
       return Sample(
-        observation: Reading(snapshot: snapshot, sessions: sessions, inventory: inventory),
+        observation: Reading(
+          snapshot: snapshot, sessions: sessions, inventory: inventory,
+          places: Dictionary(
+            uniqueKeysWithValues: zip(
+              sessions, ["Shop › checkout", "Shop › tests", "API › limiter"]
+            )
+            .map { session, location in
+              (
+                session.id,
+                HostPlace(
+                  host: "Example Terminal", hostPID: 100_900, location: location, reference: [:])
+              )
+            })),
         usage: usage,
         memory: memory,
         culprits: culprits.enumerated().map { index, culprit in

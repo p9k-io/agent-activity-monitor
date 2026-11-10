@@ -16,9 +16,13 @@ struct SessionRow: Encodable {
   let processCount: Int
   let residentBytes: UInt64
   let resumeCommand: String?
+  /// The application the Session's terminal runs in, when that can be told. Where in it is
+  /// left out: a panel's title can be anything.
+  let host: String?
 
-  init(_ group: SessionInventory) {
+  init(_ group: SessionInventory, host: String? = nil) {
     let session = group.session
+    self.host = host
     id = session.id.description
     harness = session.id.harness.rawValue
     project = session.project.name
@@ -62,7 +66,9 @@ struct SessionsReport: Encodable {
 
   init(_ observation: Reading) {
     takenAt = observation.snapshot.takenAt
-    sessions = observation.inventory.projects.flatMap(\.sessions).map(SessionRow.init)
+    sessions = observation.inventory.projects.flatMap(\.sessions).map {
+      SessionRow($0, host: observation.places[$0.id]?.host)
+    }
   }
 }
 

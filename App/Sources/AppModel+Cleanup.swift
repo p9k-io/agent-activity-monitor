@@ -1,6 +1,7 @@
 import AAMCleanup
 import AAMCore
 import AAMPlatform
+import AppKit
 import Foundation
 
 /// A Cleanup a person is looking at: proposed, being carried out, or finished.
@@ -67,6 +68,24 @@ extension AppModel {
     decided.status = .denied
     decided.decidedAt = Date()
     record(decided)
+  }
+
+  /// Where a Session's terminal lives, when its Host could be told.
+  func place(of session: SessionID) -> HostPlace? {
+    sample?.observation.places[session]
+  }
+
+  /// Brings a Session's terminal to the front: the Host's application, and the place in it
+  /// when the Host can be told where.
+  func show(_ place: HostPlace) {
+    guard !isDemo else { return }
+    NSRunningApplication(processIdentifier: place.hostPID)?.activate()
+    Task { await Self.focus(place) }
+  }
+
+  @concurrent
+  nonisolated private static func focus(_ place: HostPlace) async {
+    _ = CmuxHost().show(place)
   }
 
   /// Where CPU time went over the last days, or nil when the store cannot be read.

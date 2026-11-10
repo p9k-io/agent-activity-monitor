@@ -4,12 +4,13 @@ import Sparkle
 ///
 /// Checking for updates is the only reason the app ever uses the network. Sparkle asks before
 /// it starts checking by itself, and every update must carry a signature made with the key
-/// whose public half is in the app.
-final class Updater {
+/// whose public half is in the app. Only the app links this module.
+@MainActor
+public final class Updater {
   private let controller: SPUStandardUpdaterController?
 
   /// - Parameter enabled: False in debug builds, which have no version to compare.
-  init(enabled: Bool) {
+  public init(enabled: Bool) {
     controller =
       enabled
       ? SPUStandardUpdaterController(
@@ -17,9 +18,9 @@ final class Updater {
       : nil
   }
 
-  var isEnabled: Bool { controller != nil }
+  public var isEnabled: Bool { controller != nil }
 
-  func checkForUpdates() {
+  public func checkForUpdates() {
     controller?.checkForUpdates(nil)
   }
 }
