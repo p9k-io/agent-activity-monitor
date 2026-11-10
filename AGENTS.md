@@ -12,7 +12,7 @@ A native macOS app, a command line tool (`aam`) and an MCP server that show whic
 - `Sources/AAMCore/`: the domain with no I/O. Model, Attribution, Stale rules, Culprit ranking, reports.
 - `Sources/AAMPlatform/`: macOS adapters. Process sources, Harness adapters, Host adapters, the store.
 - `Sources/aam/`: the command line tool, including `aam mcp`.
-- `App/`: the SwiftUI app. `App/project.yml` is an XcodeGen spec; the Xcode project is generated and not committed.
+- `App/`: the SwiftUI app. `App/project.yml` is an XcodeGen spec; the Xcode project is generated and not committed. The app holds views and their model only; anything worth a test belongs in the package.
 - `Tests/`: Swift Testing suites with synthetic fixtures.
 
 ## Commands
@@ -21,6 +21,9 @@ A native macOS app, a command line tool (`aam`) and an MCP server that show whic
 - `swift test` runs the tests. `swift test --enable-code-coverage && scripts/check-coverage.sh` also checks the coverage floors.
 - `swift format --in-place --recursive Package.swift Sources Tests App/Sources` formats. CI runs the same paths with `lint --strict`.
 - `xcodegen generate --spec App/project.yml` generates `App/AgentActivityMonitor.xcodeproj`.
+- `scripts/run-app.sh` builds the app and runs it. The app lives in the menu bar; these arguments make it easier to look at:
+  - `-showWindow YES` opens the main window at launch, `-section projects` or `-section stale` chooses what it shows.
+  - `-showPanel YES` (debug builds only) shows the menu bar panel in an ordinary window.
 
 ## Rules
 
@@ -31,6 +34,8 @@ A native macOS app, a command line tool (`aam`) and an MCP server that show whic
 - **`AAMCore` does no I/O.** Files, processes, the clock and the database are reached through protocols implemented in `AAMPlatform`. Mock only at that boundary.
 - **Harness adapters degrade to unknown** when a file is missing or has an unexpected shape ([ADR 0002](docs/adr/0002-passive-observation-of-harness-files.md)). They never throw into the sampler.
 - **Public system interfaces only** ([ADR 0003](docs/adr/0003-public-apis-only.md)).
+- **The app runs all the time, so a look must stay cheap** ([ADR 0004](docs/adr/0004-always-running-sampler-with-lineage.md)). The budget is under 1 % of one core on average. What does not change is read once and kept; what is expensive is done every few looks. Measure before and after a change to the Sampler or to anything it calls.
+- Check a change to the app by looking at it: run it, capture the window, compare what it shows with `aam … --json`.
 - Write the failing test first. Tests finish within 5 seconds each.
 - UI text, identifiers, comments and documentation are in English.
 - Commits follow Conventional Commits. Pull requests are squash-merged, so the pull request title is the commit message.

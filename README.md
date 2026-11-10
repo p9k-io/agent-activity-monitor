@@ -52,12 +52,13 @@ swift build
 swift test
 ```
 
-The app is generated with [XcodeGen](https://github.com/yonaskolb/XcodeGen):
+The app is generated with [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`):
 
 ```sh
-xcodegen generate --spec App/project.yml
-open App/AgentActivityMonitor.xcodeproj
+scripts/run-app.sh -showWindow YES
 ```
+
+builds it and runs it with its window open. Without the argument it starts in the menu bar only.
 
 ## Documentation
 
