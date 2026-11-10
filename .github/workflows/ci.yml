@@ -1,0 +1,61 @@
+# CI gates: lint, dependency scan, test, build.
+# Actions are pinned to a commit SHA, not a tag; Dependabot moves the SHA and the version comment.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: swift format lint --strict --recursive Package.swift Sources Tests App/Sources
+      - run: scripts/check-file-length.sh
+
+  dep-scan:
+    name: Dependency scan (osv-scanner)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
+        with:
+          scan-args: --lockfile=/github/workspace/Package.resolved
+
+  test:
+    name: Test
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: swift build --build-tests
+      - run: swift test --enable-code-coverage
+      - run: scripts/check-coverage.sh
+
+  build:
+    name: Build
+    needs: [lint, test]
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: swift build -c release
+      - run: brew install xcodegen
+      - run: xcodegen generate --spec App/project.yml
+      - run: >-
+          xcodebuild build
+          -project App/AgentActivityMonitor.xcodeproj
+          -scheme AgentActivityMonitor
+          -configuration Release
+          -destination 'platform=macOS,arch=arm64'
+          CODE_SIGNING_ALLOWED=NO

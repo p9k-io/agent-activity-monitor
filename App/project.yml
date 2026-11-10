@@ -1,0 +1,47 @@
+# XcodeGen project definition for the Agent Activity Monitor app.
+# Generate the Xcode project with:  xcodegen generate --spec App/project.yml
+name: AgentActivityMonitor
+options:
+  bundleIdPrefix: io.p9k
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+
+packages:
+  AAM:
+    path: ..
+
+targets:
+  AgentActivityMonitor:
+    type: application
+    platform: macOS
+    sources:
+      - Sources
+    dependencies:
+      - package: AAM
+        product: AAMCore
+      - package: AAM
+        product: AAMPlatform
+    scheme: {}
+    settings:
+      base:
+        PRODUCT_NAME: Agent Activity Monitor
+        PRODUCT_MODULE_NAME: AgentActivityMonitor
+        PRODUCT_BUNDLE_IDENTIFIER: io.p9k.agent-activity-monitor
+        MARKETING_VERSION: "0.0.0" # x-release-please-version
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "6.0"
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Agent Activity Monitor
+        INFOPLIST_KEY_LSUIElement: YES
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        INFOPLIST_KEY_NSHumanReadableCopyright: Copyright © 2026 Prokop Simek. MIT License.
+        ENABLE_HARDENED_RUNTIME: YES
+        # Ad-hoc signing so anyone can build without a development team.
+        # scripts/release.sh passes the Developer ID identity for a release.
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""

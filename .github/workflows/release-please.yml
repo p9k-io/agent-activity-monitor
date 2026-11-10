@@ -1,0 +1,29 @@
+# Release Please: version and CHANGELOG from Conventional Commits.
+# Every push to main opens or updates the release pull request; merging it creates tag vX.Y.Z
+# and the GitHub Release. The action is pinned to a commit SHA; Dependabot moves it.
+# A release created with GITHUB_TOKEN does not trigger other workflows.
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# release-please is idempotent: the last run wins, an earlier one can be cancelled.
+concurrency:
+  group: release-please
+  cancel-in-progress: true
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
