@@ -18,11 +18,30 @@ enum Helper {
   }()
 
   /// Starts the helper in one of its modes: `sleep`, `ignore-term` or `tree`.
-  static func start(_ mode: String, seconds: Int = 30) throws -> Process {
+  static func start(_ mode: String, seconds: Int = 30) throws -> RunningHelper {
     let process = Process()
     process.executableURL = url
     process.arguments = [mode, String(seconds)]
+    let (ended, continuation) = AsyncStream<Void>.makeStream()
+    process.terminationHandler = { _ in continuation.finish() }
     try process.run()
-    return process
+    return RunningHelper(process: process, ended: ended)
+  }
+}
+
+/// A helper process a test started, and the moment it ends.
+struct RunningHelper {
+  let process: Process
+  fileprivate let ended: AsyncStream<Void>
+
+  var pid: Int32 { process.processIdentifier }
+
+  /// Waits until the helper has ended.
+  ///
+  /// `Process.waitUntilExit` is not used for this: it runs the run loop of the thread it is
+  /// called on, and after an `await` a test may continue on a thread the process does not
+  /// report to, where it would wait forever.
+  func exit() async {
+    for await _ in ended {}
   }
 }

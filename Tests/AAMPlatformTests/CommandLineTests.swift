@@ -5,6 +5,7 @@ import Testing
 
 /// Runs the built `aam` against the machine the tests run on. Everything it does to the machine
 /// is read-only, and what it remembers goes to a scratch store.
+@Suite(.timeLimit(.minutes(1)))
 struct CommandLineTests {
   let scratch: TemporaryDirectory
   var store: URL { scratch.url.appendingPathComponent("aam.sqlite") }
