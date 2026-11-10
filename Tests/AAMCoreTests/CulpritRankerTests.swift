@@ -131,6 +131,35 @@ struct CulpritRankerTests {
     #expect(culprit.processes.count == 2)
   }
 
+  @Test func `induced load is one Culprit under its own name`() throws {
+    let first = ProcessRecord.make(50, path: "/usr/libexec/renderer")
+    let second = ProcessRecord.make(51, path: "/usr/libexec/renderer")
+    let unrelated = ProcessRecord.make(52, path: "/usr/libexec/renderer")
+    let (inventory, usage) = measure([(first, 3), (second, 3), (unrelated, 4)])
+    let load = InducedLoad(
+      id: "web:example", title: "Web content of Example", processes: [first.key, second.key])
+
+    let culprits = CulpritRanker().culprits(in: inventory, usage: usage, inducedLoad: [load])
+
+    #expect(culprits.map(\.title) == ["Web content of Example", "renderer"])
+    #expect(culprits.first?.cpuPercent == 60)
+    #expect(culprits.first?.processes.count == 2)
+  }
+
+  @Test func `a process that belongs to a Project but to no Session is a Culprit of the Project`()
+    throws
+  {
+    let root = ProcessRecord.make(100, path: "/opt/bin/claude", terminal: true)
+    let daemon = ProcessRecord.make(400, path: "/opt/bin/watcher", cwd: "/work/alpha")
+    let session = Session.make("s1", root: root, project: "/work/alpha")
+    let (inventory, usage) = measure([(root, 0), (daemon, 5)], sessions: [session])
+
+    let culprit = try #require(CulpritRanker().culprits(in: inventory, usage: usage).first)
+
+    #expect(culprit.title == "watcher")
+    #expect(culprit.owner == .project(Project(root: "/work/alpha")))
+  }
+
   @Test func `Culprits are listed from the heaviest`() {
     let light = ProcessRecord.make(1, path: "/usr/local/bin/light")
     let heavy = ProcessRecord.make(2, path: "/usr/local/bin/heavy")

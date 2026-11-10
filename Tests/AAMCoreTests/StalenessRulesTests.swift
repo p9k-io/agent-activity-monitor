@@ -142,7 +142,8 @@ struct StalenessRulesTests {
 
     let result = findings(
       [
-        root, server(210, after: 10), helper, server(220, after: 20), server(230, after: 30), other,
+        root, server(210, after: 100), helper, server(220, after: 2000),
+        server(230, after: 9000), other,
       ],
       sessions: [session(.working, active: now)])
 
@@ -152,6 +153,20 @@ struct StalenessRulesTests {
     #expect(finding.reason == .olderDuplicate(of: 230))
     #expect(finding.processes.map(\.pid) == [210, 211, 220])
     #expect(finding.residentBytes == 25)
+  }
+
+  @Test func `servers started together are separate servers, not copies left behind`() {
+    func server(_ pid: Int32, after seconds: TimeInterval) -> ProcessRecord {
+      .make(
+        pid, parent: 100, path: "/opt/bin/node", arguments: ["npm", "exec", "some-mcp"],
+        startedAfter: seconds)
+    }
+
+    let result = findings(
+      [root, server(210, after: 10), server(220, after: 11)],
+      sessions: [session(.working, active: now)])
+
+    #expect(result.isEmpty)
   }
 
   @Test func `two copies of something that is not a server are not duplicates`() {

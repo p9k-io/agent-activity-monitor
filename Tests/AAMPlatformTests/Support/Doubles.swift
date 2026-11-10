@@ -12,12 +12,17 @@ struct DirectoryIsProject: ProjectResolver {
   }
 }
 
-/// Open files as a test declares them, instead of asking the system.
+/// Open and mapped files as a test declares them, instead of asking the system.
 struct DeclaredOpenFiles: OpenFileListing {
   var byPID: [Int32: [String]] = [:]
+  var mapped: [Int32: [String]] = [:]
 
   func openFiles(of pid: Int32) -> [String] {
     byPID[pid] ?? []
+  }
+
+  func firstMappedFile(of pid: Int32, where matches: (String) -> Bool) -> String? {
+    (mapped[pid] ?? []).first(where: matches)
   }
 }
 

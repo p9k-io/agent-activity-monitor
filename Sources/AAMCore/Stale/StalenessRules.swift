@@ -57,6 +57,8 @@ private struct Pass {
     .simulator, .browserContent, .virtualMachine,
   ]
   private static let restingStates: Set<SessionState> = [.idle, .waiting, .background]
+  /// How much later a server must have started for an earlier copy to count as left behind.
+  private static let restartGap: TimeInterval = 60
 
   // MARK: Sessions
 
@@ -88,8 +90,13 @@ private struct Pass {
       .values
       .compactMap { copies -> StaleFinding? in
         let ordered = copies.sorted { ($0.startedAt, $0.pid) < ($1.startedAt, $1.pid) }
-        guard let newest = ordered.last, ordered.count > 1 else { return nil }
-        let older = ordered.dropLast().flatMap { subtree(of: $0, within: members) }
+        guard let newest = ordered.last else { return nil }
+        // Copies started together are separate servers. A copy left behind is older.
+        let leftBehind = ordered.filter {
+          newest.startedAt.timeIntervalSince($0.startedAt) > Self.restartGap
+        }
+        guard !leftBehind.isEmpty else { return nil }
+        let older = leftBehind.flatMap { subtree(of: $0, within: members) }
         return finding(
           .ownerlessLeftover, .olderDuplicate(of: newest.pid),
           title: newest.name, project: group.session.project, session: group.session.id, older)

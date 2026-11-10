@@ -157,6 +157,69 @@ struct MineReport: Encodable {
   }
 }
 
+struct FindingRow: Encodable {
+  struct Reason: Encodable {
+    let kind: String
+    let since: Date?
+    let session: String?
+    let pid: Int32?
+  }
+
+  let kind: String
+  let reason: Reason
+  let title: String
+  let project: String
+  let projectRoot: String
+  let session: String?
+  let pids: [Int32]
+  let residentBytes: UInt64
+  let canCleanUp: Bool
+
+  init(_ finding: StaleFinding) {
+    kind = finding.kind.rawValue
+    reason =
+      switch finding.reason {
+      case .sessionIdle(let since):
+        Reason(kind: "sessionIdle", since: since, session: nil, pid: nil)
+      case .orphan(let former, let since):
+        Reason(kind: "orphan", since: since, session: former?.description, pid: nil)
+      case .zombie(let parent):
+        Reason(kind: "zombie", since: nil, session: nil, pid: parent)
+      case .olderDuplicate(let newest):
+        Reason(kind: "olderDuplicate", since: nil, session: nil, pid: newest)
+      case .projectQuiet(let since):
+        Reason(kind: "projectQuiet", since: since, session: nil, pid: nil)
+      case .serverIdle(let since):
+        Reason(kind: "serverIdle", since: since, session: nil, pid: nil)
+      }
+    title = finding.title
+    project = finding.project.name
+    projectRoot = finding.project.root
+    session = finding.session?.description
+    pids = finding.processes.map(\.pid)
+    residentBytes = finding.residentBytes
+    canCleanUp = finding.canCleanUp
+  }
+}
+
+struct StaleReport: Encodable {
+  let takenAt: Date
+  /// The memory a Cleanup of everything that can be cleaned up would free.
+  let reclaimableBytes: UInt64
+  /// Whether CPU use is being watched over time, which judging dev servers needs.
+  let activityObserved: Bool
+  let findings: [FindingRow]
+
+  init(takenAt: Date, findings: [StaleFinding], memory: Memory) {
+    self.takenAt = takenAt
+    reclaimableBytes = findings.filter(\.canCleanUp).reduce(0) { $0 + $1.residentBytes }
+    activityObserved =
+      memory.activityAsOf.map { takenAt.timeIntervalSince($0) <= Memory.longestActivityGap }
+      ?? false
+    self.findings = findings.map(FindingRow.init)
+  }
+}
+
 func printJSON(_ value: some Encodable) throws {
   let encoder = JSONEncoder()
   encoder.dateEncodingStrategy = .iso8601

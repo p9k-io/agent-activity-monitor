@@ -13,7 +13,7 @@ struct Processes: ParsableCommand {
   var all = false
 
   func run() throws {
-    let report = ProcessesReport(Observer.system().observe(), includeUnattributed: all)
+    let report = ProcessesReport(Monitor.system().look().observation, includeUnattributed: all)
     if output.json {
       try printJSON(report)
     } else {

@@ -29,10 +29,13 @@ Planned for the first release:
 aam sessions    # running Sessions with their Project, state and memory
 aam ps          # processes grouped by Project and Session, each with its Evidence
 aam culprits    # what is consuming CPU right now and whom it belongs to
+aam stale       # what is no longer needed, and why
 aam mine        # the Session this command runs in and what is attributed to it
 ```
 
 `aam` never ends a process.
+
+What `aam` and the app remember (which process belonged to which Session, and when a Session ended) is kept in `~/Library/Application Support/io.p9k.agent-activity-monitor/aam.sqlite`. Set `AAM_STORE` to keep it somewhere else.
 
 ## Principles
 
