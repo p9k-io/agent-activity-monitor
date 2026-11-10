@@ -1,18 +1,23 @@
 import AAMCore
 import Foundation
+import Synchronization
 
 /// Finds Codex CLI Sessions.
 ///
 /// Codex appends every thread to a rollout file under `~/.codex/sessions` and keeps that file
 /// open. The file name carries the thread identifier; the events inside tell whether a turn is
 /// running. The format is internal and undocumented, so whatever cannot be read is not known.
-public struct CodexAdapter: HarnessAdapter {
+public final class CodexAdapter: HarnessAdapter {
   public let harness = HarnessID.codex
   public let markerNames: Set<String> = []
 
   private let root: URL
   private let projects: any ProjectResolver
   private let openFiles: any OpenFileListing
+  /// What each rollout said and how long it was then, so that only what was appended is read.
+  private let rollouts = Mutex<[String: (size: Int64, tail: RolloutTail)]>([:])
+  /// Thread names as last read from the index.
+  private let titles = Mutex<(stamp: FileStamp?, names: [String: String])>((nil, [:]))
 
   public init(
     home: URL = FileManager.default.homeDirectoryForCurrentUser,
@@ -39,7 +44,7 @@ public struct CodexAdapter: HarnessAdapter {
         let isHelper = tree.ancestors(of: process.pid).contains { candidatePIDs.contains($0.pid) }
         guard process.hasTerminal, !isHelper else { return nil }
       }
-      let tail = thread?.path.map(RolloutTail.init(path:))
+      let tail = thread?.path.map(tail(of:))
       let directory = process.workingDirectory ?? "/"
       return Session(
         id: SessionID(harness: harness, value: thread?.id ?? "pid-\(process.pid)"),
@@ -57,8 +62,8 @@ public struct CodexAdapter: HarnessAdapter {
 
   private func isCodex(_ process: ProcessRecord) -> Bool {
     guard !process.isZombie else { return false }
-    return process.name == "codex"
-      || process.arguments.first?.split(separator: "/").last == "codex"
+    return process.executablePath.hasSuffix("/codex")
+      || process.arguments.first.map { $0 == "codex" || $0.hasSuffix("/codex") } == true
   }
 
   private struct Thread {
@@ -92,20 +97,48 @@ public struct CodexAdapter: HarnessAdapter {
     return nil
   }
 
-  /// Thread names from Codex's index, later lines winning.
-  private func threadTitles() -> [String: String] {
-    let index = root.appendingPathComponent("session_index.jsonl")
-    guard let text = try? String(contentsOf: index, encoding: .utf8) else { return [:] }
-    var titles: [String: String] = [:]
-    for line in text.split(separator: "\n") {
-      guard let entry = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
-        let id = entry["id"] as? String,
-        let name = entry["thread_name"] as? String,
-        !name.isEmpty
-      else { continue }
-      titles[id] = name
+  /// What a rollout says now. A rollout only grows, so after the first read only the new end
+  /// of the file is looked at.
+  private func tail(of path: String) -> RolloutTail {
+    guard let size = FileStamp(path: path)?.size else {
+      rollouts.withLock { $0[path] = nil }
+      return RolloutTail(path: path)
     }
-    return titles
+    let known = rollouts.withLock { $0[path] }
+    let tail: RolloutTail
+    if let known, known.size == size {
+      return known.tail
+    } else if let known, known.size < size {
+      tail = known.tail.advanced(path: path, from: UInt64(known.size), to: UInt64(size))
+    } else {
+      tail = RolloutTail(path: path)
+    }
+    rollouts.withLock { $0[path] = (size, tail) }
+    return tail
+  }
+
+  /// Thread names from Codex's index, later lines winning. The index is read again only when
+  /// it changes.
+  private func threadTitles() -> [String: String] {
+    let index = root.appendingPathComponent("session_index.jsonl").path
+    let stamp = FileStamp(path: index)
+    if let known = titles.withLock({ $0.stamp == stamp ? $0.names : nil }) {
+      return known
+    }
+    var names: [String: String] = [:]
+    if let data = FileManager.default.contents(atPath: index) {
+      for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
+        guard
+          let entry = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
+          let id = entry["id"] as? String,
+          let name = entry["thread_name"] as? String,
+          !name.isEmpty
+        else { continue }
+        names[id] = name
+      }
+    }
+    titles.withLock { $0 = (stamp, names) }
+    return names
   }
 }
 

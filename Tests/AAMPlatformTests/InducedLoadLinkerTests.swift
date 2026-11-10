@@ -60,7 +60,8 @@ struct WebContentLinkerTests {
     + "com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebKit.WebContent"
 
   func linker(open: [Int32: [String]] = [:], mapped: [Int32: [String]] = [:]) -> WebContentLinker {
-    WebContentLinker(files: DeclaredOpenFiles(byPID: open, mapped: mapped))
+    WebContentLinker(
+      files: DeclaredOpenFiles(byPID: open, mapped: mapped), applicationName: { _ in nil })
   }
 
   @Test func `web content is grouped by the application whose storage it has mapped`() {
@@ -96,6 +97,34 @@ struct WebContentLinkerTests {
         .inducedLoad(in: snapshot).isEmpty)
   }
 
+  @Test func `web content is named after the application when the system knows its name`() {
+    let linker = WebContentLinker(
+      files: DeclaredOpenFiles(mapped: [10: ["/Users/dev/Library/WebKit/com.example.terminal/db"]]),
+      applicationName: { $0 == "com.example.terminal" ? "Example Terminal" : nil })
+
+    let loads = linker.inducedLoad(in: .of(.make(10, path: renderer)))
+
+    #expect(loads.map(\.title) == ["Web content of Example Terminal"])
+    #expect(loads.map(\.id) == ["web-content:com.example.terminal"])
+  }
+
+  @Test func `the application of a web content process is looked up once`() {
+    let files = CountingFiles(mapped: [
+      10: ["/Users/dev/Library/WebKit/com.example.terminal/db"],
+      11: ["/usr/lib/dyld"],
+    ])
+    let linker = WebContentLinker(files: files, applicationName: { _ in nil })
+    let snapshot = Snapshot.of(.make(10, path: renderer), .make(11, path: renderer))
+
+    let first = linker.inducedLoad(in: snapshot)
+    let second = linker.inducedLoad(in: snapshot)
+
+    #expect(first == second)
+    #expect(first.map(\.id) == ["web-content:com.example.terminal"])
+    // Each helper is asked once for its open files and once for its mapped files.
+    #expect(files.timesAsked == 4)
+  }
+
   @Test func `other processes are not asked for their files`() {
     let snapshot = Snapshot.of(.make(20, path: "/opt/bin/node"))
 
@@ -124,5 +153,52 @@ struct LibprocMappedFilesTests {
 
   @Test func `nothing is found when no mapped file matches`() {
     #expect(LibprocOpenFiles().firstMappedFile(of: getpid()) { _ in false } == nil)
+  }
+}
+
+struct VirtualMachineLinkerTests {
+  let machine =
+    "/System/Library/Frameworks/Virtualization.framework/XPCServices/"
+    + "com.apple.Virtualization.VirtualMachine.xpc/Contents/MacOS/"
+    + "com.apple.Virtualization.VirtualMachine"
+
+  @Test func `a virtual machine is named after the tool whose disk image it runs`() {
+    let files = DeclaredOpenFiles(byPID: [
+      30: ["/Users/dev/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw"],
+      31: ["/Users/dev/.local/share/containers/podman/machine/applehv/machine.raw"],
+    ])
+
+    let loads = VirtualMachineLinker(files: files)
+      .inducedLoad(in: .of(.make(30, path: machine), .make(31, path: machine)))
+
+    #expect(loads.map(\.title) == ["Virtual machine of Docker", "Virtual machine of Podman"])
+  }
+
+  @Test func `a virtual machine nobody recognises is still named for what it is`() {
+    let loads = VirtualMachineLinker(files: DeclaredOpenFiles(byPID: [30: ["/dev/null"]]))
+      .inducedLoad(in: .of(.make(30, path: machine)))
+
+    #expect(loads.map(\.title) == ["Virtual machine"])
+    #expect(loads.first?.processes.map(\.pid) == [30])
+  }
+
+  @Test func `the tool behind a virtual machine is looked up once`() {
+    let files = CountingFiles(open: [30: ["/x/com.docker.docker/Docker.raw"]])
+    let linker = VirtualMachineLinker(files: files)
+    let snapshot = Snapshot.of(.make(30, path: machine))
+
+    _ = linker.inducedLoad(in: snapshot)
+    let asked = files.timesAsked
+    _ = linker.inducedLoad(in: snapshot)
+
+    #expect(files.timesAsked == asked)
+  }
+
+  @Test func `other processes are not virtual machines`() {
+    let files = DeclaredOpenFiles(byPID: [40: ["/x/com.docker.docker/Docker.raw"]])
+
+    #expect(
+      VirtualMachineLinker(files: files).inducedLoad(in: .of(.make(40, path: "/opt/bin/node")))
+        .isEmpty)
   }
 }

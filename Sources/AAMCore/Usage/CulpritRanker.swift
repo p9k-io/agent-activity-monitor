@@ -1,3 +1,5 @@
+import Foundation
+
 /// Anything consuming enough CPU right now to heat the machine, attributed or not.
 public struct Culprit: Sendable, Equatable, Identifiable {
   public enum Owner: Sendable, Equatable {
@@ -28,6 +30,38 @@ public struct Culprit: Sendable, Equatable, Identifiable {
     self.cpuPercent = cpuPercent
     self.residentBytes = residentBytes
     self.processes = processes
+  }
+}
+
+/// A Culprit with the time since which it has been one without a break.
+public struct TrackedCulprit: Sendable, Equatable, Identifiable {
+  public let culprit: Culprit
+  public let hotSince: Date
+
+  public init(culprit: Culprit, hotSince: Date) {
+    self.culprit = culprit
+    self.hotSince = hotSince
+  }
+
+  public var id: String { culprit.id }
+}
+
+/// Remembers since when each Culprit has been one, from one look to the next.
+public struct CulpritTracker: Sendable {
+  private var since: [String: Date] = [:]
+
+  public init() {}
+
+  public mutating func track(_ culprits: [Culprit], at now: Date) -> [TrackedCulprit] {
+    var current: [String: Date] = [:]
+    let tracked = culprits.map { culprit in
+      let hotSince = since[culprit.id] ?? now
+      current[culprit.id] = hotSince
+      return TrackedCulprit(culprit: culprit, hotSince: hotSince)
+    }
+    // A Culprit that is gone starts over when it comes back.
+    since = current
+    return tracked
   }
 }
 
@@ -117,9 +151,9 @@ public struct CulpritRanker: Sendable {
 extension ProcessRecord {
   /// The application the executable lives in, or the executable's own name outside of one.
   var applicationOrName: String {
-    for component in executablePath.split(separator: "/") where component.hasSuffix(".app") {
-      return String(component.dropLast(4))
-    }
-    return name
+    guard let bundle = executablePath.range(of: ".app/") else { return name }
+    let before = executablePath[..<bundle.lowerBound]
+    guard let slash = before.lastIndex(of: "/") else { return String(before) }
+    return String(before[before.index(after: slash)...])
   }
 }

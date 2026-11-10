@@ -36,4 +36,16 @@ enum Helper {
     try process.run()
     return process
   }
+
+  /// Starts the helper in the mode that turns into `/bin/sleep` when a byte arrives on its
+  /// standard input. Returns the process and the pipe to write that byte to.
+  static func becomingSleep(seconds: Int = 30) throws -> (process: Process, trigger: Pipe) {
+    let process = Process()
+    let trigger = Pipe()
+    process.executableURL = url
+    process.arguments = ["become-sleep", String(seconds)]
+    process.standardInput = trigger
+    try process.run()
+    return (process, trigger)
+  }
 }

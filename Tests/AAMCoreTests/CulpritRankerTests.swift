@@ -37,6 +37,59 @@ struct UsageTests {
   }
 }
 
+struct UsageCombiningTests {
+  let own = ProcessRecord.make(1, user: 501)
+  let other = ProcessRecord.make(2, user: 0)
+
+  @Test func `a measurement can be limited to some processes`() {
+    let before = Snapshot(takenAt: epoch, processes: [own, other])
+    let after = Snapshot(
+      takenAt: epoch.addingTimeInterval(10),
+      processes: [.make(1, cpu: .seconds(5), user: 501), .make(2, cpu: .seconds(2), user: 0)])
+
+    let usage = Usage(previous: before, current: after).limited { $0.pid == 1 }
+
+    #expect(usage.cpuPercent(of: own.key) == 50)
+    #expect(usage.cpuPercent(of: other.key) == 0)
+  }
+
+  @Test func `two measurements of different processes combine into one`() {
+    let fast = Usage([own.key: 50])
+    let slow = Usage([other.key: 20])
+
+    let both = fast.merging(slow)
+
+    #expect(both.cpuPercent(of: own.key) == 50)
+    #expect(both.cpuPercent(of: other.key) == 20)
+  }
+}
+
+struct CulpritTrackerTests {
+  func culprit(_ id: String) -> Culprit {
+    Culprit(id: id, title: id, owner: .none, cpuPercent: 100, residentBytes: 0, processes: [])
+  }
+
+  @Test func `a Culprit is hot since it was first seen and stays so while it lasts`() {
+    var tracker = CulpritTracker()
+
+    let first = tracker.track([culprit("a")], at: epoch)
+    let later = tracker.track([culprit("a"), culprit("b")], at: epoch.addingTimeInterval(60))
+
+    #expect(first.map(\.hotSince) == [epoch])
+    #expect(later.map(\.hotSince) == [epoch, epoch.addingTimeInterval(60)])
+  }
+
+  @Test func `a Culprit that cooled down starts over when it comes back`() {
+    var tracker = CulpritTracker()
+    _ = tracker.track([culprit("a")], at: epoch)
+    _ = tracker.track([], at: epoch.addingTimeInterval(60))
+
+    let back = tracker.track([culprit("a")], at: epoch.addingTimeInterval(120))
+
+    #expect(back.first?.hotSince == epoch.addingTimeInterval(120))
+  }
+}
+
 struct CulpritRankerTests {
   /// Builds two snapshots ten seconds apart in which each process spent `seconds` of CPU time.
   func measure(

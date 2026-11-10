@@ -60,7 +60,7 @@ struct SessionsReport: Encodable {
   let takenAt: Date
   let sessions: [SessionRow]
 
-  init(_ observation: Observation) {
+  init(_ observation: Reading) {
     takenAt = observation.snapshot.takenAt
     sessions = observation.inventory.projects.flatMap(\.sessions).map(SessionRow.init)
   }
@@ -88,7 +88,7 @@ struct ProcessesReport: Encodable {
   let unattributedCount: Int
   let unattributed: [ProcessRow]?
 
-  init(_ observation: Observation, includeUnattributed: Bool) {
+  init(_ observation: Reading, includeUnattributed: Bool) {
     takenAt = observation.snapshot.takenAt
     projects = observation.inventory.projects.map { project in
       ProjectRow(
@@ -174,8 +174,13 @@ struct FindingRow: Encodable {
   let pids: [Int32]
   let residentBytes: UInt64
   let canCleanUp: Bool
+  /// The kind and the reason in words, as the app shows them.
+  let kindLabel: String
+  let reasonText: String
 
-  init(_ finding: StaleFinding) {
+  init(_ finding: StaleFinding, now: Date) {
+    kindLabel = finding.kind.label
+    reasonText = finding.reason.text(now: now)
     kind = finding.kind.rawValue
     reason =
       switch finding.reason {
@@ -216,7 +221,7 @@ struct StaleReport: Encodable {
     activityObserved =
       memory.activityAsOf.map { takenAt.timeIntervalSince($0) <= Memory.longestActivityGap }
       ?? false
-    self.findings = findings.map(FindingRow.init)
+    self.findings = findings.map { FindingRow($0, now: takenAt) }
   }
 }
 

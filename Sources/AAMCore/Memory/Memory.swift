@@ -56,7 +56,7 @@ public struct Memory: Sendable, Equatable {
   ///   - usage: CPU use since the previous observation, when there was one.
   ///   - busyAbove: CPU use, in percent of one core, from which a process counts as busy.
   public mutating func absorb(
-    _ observation: Observation, usage: Usage? = nil, busyAbove: Double = 1
+    _ observation: Reading, usage: Usage? = nil, busyAbove: Double = 1
   ) {
     let now = observation.snapshot.takenAt
     var live: Set<SessionID> = []

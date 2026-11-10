@@ -1,5 +1,8 @@
 /// What one look at the machine found.
-public struct Observation: Sendable, Equatable {
+///
+/// Not called an observation: a type of that name would hide Swift's Observation module from
+/// every client that imports this one.
+public struct Reading: Sendable, Equatable {
   public let snapshot: Snapshot
   public let sessions: [Session]
   public let inventory: Inventory
@@ -33,10 +36,14 @@ public struct Observer: Sendable {
 
   /// - Parameter memory: What earlier looks found. It lets a process be attributed after the
   ///   process table no longer links it to its Session.
-  public func observe(remembering memory: Memory = .empty) -> Observation {
-    let snapshot = source.snapshot()
+  public func observe(remembering memory: Memory = .empty) -> Reading {
+    observe(source.snapshot(), remembering: memory)
+  }
+
+  /// Sorts a snapshot that was taken already.
+  public func observe(_ snapshot: Snapshot, remembering memory: Memory = .empty) -> Reading {
     let sessions = adapters.flatMap { $0.sessions(in: snapshot) }
-    return Observation(
+    return Reading(
       snapshot: snapshot,
       sessions: sessions,
       inventory: attributor.inventory(of: snapshot, sessions: sessions, memory: memory)

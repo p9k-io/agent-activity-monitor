@@ -21,18 +21,12 @@ func columns(_ header: [String], _ rows: [[String]]) -> String {
 }
 
 func memory(_ bytes: UInt64) -> String {
-  ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: .memory)
+  Format.memory(bytes)
 }
 
-/// How long ago `date` was, in the two largest units: `3d 4h`, `2h 5m`, `40s`.
+/// How long ago `date` was, or a dash when it is not known.
 func age(of date: Date?, now: Date) -> String {
-  guard let date else { return "-" }
-  let seconds = max(0, Int(now.timeIntervalSince(date)))
-  let (days, hours, minutes) = (seconds / 86_400, seconds % 86_400 / 3600, seconds % 3600 / 60)
-  if days > 0 { return "\(days)d \(hours)h" }
-  if hours > 0 { return "\(hours)h \(minutes)m" }
-  if minutes > 0 { return "\(minutes)m" }
-  return "\(seconds)s"
+  date.map { Format.span(from: $0, to: now) } ?? "-"
 }
 
 extension SessionsReport {
@@ -132,7 +126,7 @@ extension StaleReport {
         ["KIND", "WHAT", "PROJECT", "WHY", "PROCS", "MEMORY"],
         findings.map { row in
           [
-            row.kindLabel, row.title, row.project, row.reason.text(now: now),
+            row.kindLabel, row.title, row.project, row.reasonText,
             String(row.pids.count), memory(row.residentBytes),
           ]
         })
@@ -143,32 +137,5 @@ extension StaleReport {
       lines.append("Idle dev servers are judged only while the app is running.")
     }
     return lines.joined(separator: "\n")
-  }
-}
-
-extension FindingRow {
-  var kindLabel: String {
-    switch kind {
-    case "idleSession": "idle session"
-    case "ownerlessLeftover": "ownerless leftover"
-    case "forgottenInducedLoad": "forgotten induced load"
-    case "idleDevServer": "idle dev server"
-    default: kind
-    }
-  }
-}
-
-extension FindingRow.Reason {
-  func text(now: Date) -> String {
-    switch kind {
-    case "sessionIdle": "no activity for \(age(of: since, now: now))"
-    case "orphan":
-      since == nil ? "its Session is gone" : "its Session ended \(age(of: since, now: now)) ago"
-    case "zombie": "ended, waiting to be collected by \(pid.map(String.init) ?? "its parent")"
-    case "olderDuplicate": "older copy of \(pid.map(String.init) ?? "a newer one")"
-    case "projectQuiet": "nothing worked in the Project for \(age(of: since, now: now))"
-    case "serverIdle": "no CPU use for \(age(of: since, now: now))"
-    default: kind
-    }
   }
 }

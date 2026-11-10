@@ -67,6 +67,8 @@ private struct Sorter {
   private var owned: [SessionID: [AttributedProcess]] = [:]
   private var loose: [Project: [AttributedProcess]] = [:]
   private var looseByPID: [Int32: (project: Project, attributed: AttributedProcess)] = [:]
+  /// The tree owner of each process looked at so far; nil inside means none.
+  private var treeOwners: [Int32: SessionID?] = [:]
 
   init(live: [Session], memory: Memory, tree: ProcessTree, classifier: ProcessClassifier) {
     self.live = live
@@ -168,12 +170,32 @@ private struct Sorter {
   // MARK: Evidence
 
   /// The Session whose root is the process itself or its nearest ancestor.
-  private func treeOwner(of process: ProcessRecord) -> SessionID? {
-    if let owner = ownerByRoot[process.pid] { return owner }
-    for ancestor in tree.ancestors(of: process.pid) {
-      if let owner = ownerByRoot[ancestor.pid] { return owner }
+  ///
+  /// The answer for every process on the way up is kept, so each link of the tree is walked
+  /// once per pass however many processes hang below it.
+  private mutating func treeOwner(of process: ProcessRecord) -> SessionID? {
+    var chain: [Int32] = []
+    var owner: SessionID?
+    var next: Int32? = process.pid
+    while let pid = next {
+      if let known = treeOwners[pid] {
+        owner = known
+        break
+      }
+      if let root = ownerByRoot[pid] {
+        owner = root
+        treeOwners[pid] = .some(root)
+        break
+      }
+      // A process that is its own ancestor would loop forever.
+      guard !chain.contains(pid) else { break }
+      chain.append(pid)
+      next = tree.process(pid).map(\.parentPID)
     }
-    return nil
+    for pid in chain {
+      treeOwners[pid] = .some(owner)
+    }
+    return owner
   }
 
   private func marker(of process: ProcessRecord, in index: [Marker: SessionID]) -> SessionID? {

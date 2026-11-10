@@ -3,7 +3,7 @@ import Foundation
 
 /// What one look found, with what is remembered after it.
 public struct Look: Sendable {
-  public let observation: Observation
+  public let observation: Reading
   public let memory: Memory
   /// CPU use since the look before, when there was one.
   public let usage: Usage?
@@ -32,7 +32,7 @@ public struct Monitor: Sendable {
 
   /// - Parameter previous: The look before this one. With it, CPU use is measured and activity
   ///   is recorded. Without it, only what belongs where is remembered.
-  public func look(after previous: Observation? = nil) -> Look {
+  public func look(after previous: Reading? = nil) -> Look {
     var memory = (try? store?.loadMemory()) ?? .empty
     let observation = observer.observe(remembering: memory)
     let usage = previous.map { Usage(previous: $0.snapshot, current: observation.snapshot) }
@@ -44,7 +44,7 @@ public struct Monitor: Sendable {
   }
 
   /// The induced load among the processes of an observation.
-  public func inducedLoad(in observation: Observation) -> [InducedLoad] {
+  public func inducedLoad(in observation: Reading) -> [InducedLoad] {
     observer.inducedLoad(in: observation.snapshot)
   }
 }
