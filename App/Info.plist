@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Where Sparkle looks for a newer version: the feed attached to the latest release. -->
+	<key>SUFeedURL</key>
+	<string>https://github.com/p9k-io/agent-activity-monitor/releases/latest/download/appcast.xml</string>
+	<!-- The public half of the key every update must be signed with. -->
+	<key>SUPublicEDKey</key>
+	<string>NAMinzpmnDMft3CyWE/9ORxHChLyNCFOIeYhTSISyp8=</string>
+</dict>
+</plist>

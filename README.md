@@ -4,6 +4,10 @@
 
 A native macOS app that shows which processes exist because of AI coding agent sessions, what is heating your Mac right now, and what can safely go.
 
+![The Overview: what is using CPU right now, and which Session it belongs to](docs/images/overview.png)
+
+The screenshots show made-up Sessions: the app's demo mode.
+
 ## The problem
 
 A day of parallel sessions in Claude Code or Codex CLI leaves hundreds of processes behind: MCP servers, dev servers, language servers, simulators, browser panes. The fan spins up, and Activity Monitor cannot tell you which session any of it belongs to or whether it is still needed.
@@ -46,6 +50,8 @@ What `aam` and the app remember is kept in `~/Library/Application Support/io.p9k
 
 While the app runs, it adds up the CPU time and the peak memory of each Session per minute and kind of process. **Reports** in the app and `aam report` show where it went over the last day, week or month. What uses less than 1 % of one core is not counted, so an idle Session leaves no trace.
 
+![Reports: where CPU time went over a week](docs/images/reports.png)
+
 The app can tell you when something keeps using CPU: switch on **Alerts** in Settings and choose how long and how much. It is off until you ask for it.
 
 ## For agents
@@ -72,10 +78,14 @@ None of them ends a process. At most 50 requests wait for a decision at a time, 
 
 Nothing is ended without a dialog that lists it first. The dialog shows every process a Cleanup would end, how much memory that frees, what is left alone and why, and what you should know before you say yes: that a Session is working right now, or that an older copy of a server is only probably left behind.
 
+![Stale: what is no longer needed, and why](docs/images/stale.png)
+
 - **Stale** offers a Cleanup for each finding, or for all of them at once.
 - **Projects** ends a Session with everything attributed to it and gives you the command that reopens it.
 - **Overview** shuts a simulator down with Xcode's own tool and ends the web content of an application. Virtual machines and system processes are only shown.
 - **Requests** lists what Sessions and scripts asked for. Approve or deny each one.
+
+![The dialog that asks before a Session is ended](docs/images/cleanup-dialog.png)
 
 Each process is asked to exit. What has not exited after 5 seconds is ended by force. Only your own processes can be ended, never the app itself or what it runs under, and a process identifier that now belongs to another process is never touched.
 
