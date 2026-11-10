@@ -7,3 +7,4 @@ The `aam` command line tool and the MCP server never send a signal to any proces
 - A Session cannot tidy up unattended. It can only ask.
 - Cleanup requests need the app to be running to be decided.
 - Before any signal the app re-checks the process identifier together with the process start time, so a recycled identifier is never hit.
+- The code that sends signals lives in its own module, `AAMCleanup`. Only the app links it. `scripts/check-boundaries.sh` fails the build when anything else imports it or sends a signal.

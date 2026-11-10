@@ -19,6 +19,18 @@ public struct Sample: Sendable {
   public let inducedLoad: [InducedLoad]
   public let findings: [StaleFinding]
 
+  public init(
+    observation: Reading, usage: Usage, memory: Memory, culprits: [TrackedCulprit],
+    inducedLoad: [InducedLoad], findings: [StaleFinding]
+  ) {
+    self.observation = observation
+    self.usage = usage
+    self.memory = memory
+    self.culprits = culprits
+    self.inducedLoad = inducedLoad
+    self.findings = findings
+  }
+
   public var takenAt: Date { observation.snapshot.takenAt }
 }
 
@@ -81,11 +93,11 @@ public actor Sampler {
     memory = (try? store?.loadMemory()) ?? .empty
   }
 
-  /// A Sampler of this machine that keeps what it remembers in the store in its usual place.
-  public static func system() -> Sampler {
+  /// A Sampler of this machine. By default it keeps what it remembers in the store in its
+  /// usual place.
+  public static func system(store: Store? = try? Store(url: Store.defaultURL)) -> Sampler {
     let parts = SystemParts()
-    return Sampler(
-      source: parts.source, observer: parts.observer, store: try? Store(url: Store.defaultURL))
+    return Sampler(source: parts.source, observer: parts.observer, store: store)
   }
 
   public func update(_ settings: Settings) {

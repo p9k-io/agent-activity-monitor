@@ -14,6 +14,10 @@ struct MenuPanel: View {
       culprits
       Divider()
       stale
+      if !model.pendingRequests.isEmpty {
+        Divider()
+        requests
+      }
       Divider()
       footer
     }
@@ -94,6 +98,21 @@ struct MenuPanel: View {
           Button("Review…") { show(.stale) }
         }
       }
+    }
+  }
+
+  private var requests: some View {
+    let count = model.pendingRequests.count
+    return HStack {
+      VStack(alignment: .leading, spacing: 2) {
+        Text("Cleanup requests")
+          .font(.subheadline.weight(.semibold))
+        Text("\(count) waiting for your decision")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+      Spacer()
+      Button("Decide…") { show(.requests) }
     }
   }
 

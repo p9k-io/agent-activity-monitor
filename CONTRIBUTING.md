@@ -8,7 +8,7 @@ You need macOS 26, Xcode 26 and XcodeGen (`brew install xcodegen`).
 scripts/check.sh
 ```
 
-runs every gate that CI runs: formatting, file length, tests with coverage floors, a release build of the package and a build of the app.
+runs every gate that CI runs: formatting, file length, the rule that only one module ends processes, tests with coverage floors, a release build of the package and a build of the app.
 
 ## How we work
 
@@ -17,6 +17,7 @@ runs every gate that CI runs: formatting, file length, tests with coverage floor
 - Keep `AAMCore` free of I/O. Anything that touches files, processes, the clock or the database goes behind a protocol in `AAMPlatform`.
 - Test fixtures are synthetic. Do not paste process lists, paths or session files from a real machine.
 - Tests must not signal any process they did not start themselves.
+- Look at Cleanup dialogs in demo mode (`scripts/run-app.sh -demo YES -showWindow YES`). Do not confirm a Cleanup of anything real to see whether it works.
 - A decision that is hard to reverse, surprising, and the result of a real trade-off gets a short record in [docs/adr/](docs/adr/).
 
 ## Adding a Harness

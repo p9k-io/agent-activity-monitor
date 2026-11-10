@@ -190,11 +190,13 @@ struct CulpritRankerTests {
     let unrelated = ProcessRecord.make(52, path: "/usr/libexec/renderer")
     let (inventory, usage) = measure([(first, 3), (second, 3), (unrelated, 4)])
     let load = InducedLoad(
-      id: "web:example", title: "Web content of Example", processes: [first.key, second.key])
+      id: "web:example", kind: .webContent(application: "example"),
+      title: "Web content of Example", processes: [first.key, second.key])
 
     let culprits = CulpritRanker().culprits(in: inventory, usage: usage, inducedLoad: [load])
 
     #expect(culprits.map(\.title) == ["Web content of Example", "renderer"])
+    #expect(culprits.map(\.load) == [.webContent(application: "example"), nil])
     #expect(culprits.first?.cpuPercent == 60)
     #expect(culprits.first?.processes.count == 2)
   }

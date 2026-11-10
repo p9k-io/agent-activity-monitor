@@ -58,6 +58,47 @@ extension StaleFinding.Reason {
   }
 }
 
+extension CleanupPlan.Reason {
+  /// Why a process is left alone, in words that fit after its identifier.
+  public var explanation: String {
+    switch self {
+    case .gone: "there is no such process any more"
+    case .notYours: "it belongs to another user"
+    case .protected: "it must never be ended"
+    case .zombie: "it has ended already and waits to be collected by its parent"
+    }
+  }
+}
+
+extension CleanupRequest.Outcome {
+  /// What a Cleanup did, as the numbers that are not zero.
+  public var text: String {
+    let parts = [
+      (ended, "exited"), (killed, "ended by force"), (survived, "still running"),
+      (refused, "left alone"),
+    ]
+    .filter { $0.0 > 0 }
+    .map { "\($0.0) \($0.1)" }
+    return parts.isEmpty ? "Nothing was ended." : parts.joined(separator: ", ") + "."
+  }
+}
+
+extension HarnessID {
+  /// The Harness by the name people know it by.
+  public var label: String {
+    switch self {
+    case .claudeCode: "Claude Code"
+    case .codex: "Codex"
+    default: rawValue
+    }
+  }
+}
+
+extension Session {
+  /// The Session's title, or its Project's name when it has none.
+  public var displayTitle: String { title ?? project.name }
+}
+
 extension SessionState {
   public var label: String {
     switch self {

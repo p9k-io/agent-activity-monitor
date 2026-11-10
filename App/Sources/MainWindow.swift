@@ -9,7 +9,7 @@ struct MainWindow: View {
     NavigationSplitView {
       List(MainSection.allCases, selection: $model.section) { section in
         Label(section.rawValue, systemImage: section.symbol)
-          .badge(section == .stale ? model.findings.count : 0)
+          .badge(badge(of: section))
           .tag(section)
       }
       .navigationSplitViewColumnWidth(min: 160, ideal: 180)
@@ -19,12 +19,24 @@ struct MainWindow: View {
         case .overview: OverviewView()
         case .projects: ProjectsView()
         case .stale: StaleView()
+        case .requests: RequestsView()
         }
       }
       .navigationTitle(model.section.rawValue)
     }
+    .sheet(item: $model.cleanup) { _ in
+      CleanupSheet()
+    }
     .onAppear { model.watch() }
     .onDisappear { model.unwatch() }
+  }
+
+  private func badge(of section: MainSection) -> Int {
+    switch section {
+    case .stale: model.findings.count
+    case .requests: model.pendingRequests.count
+    case .overview, .projects: 0
+    }
   }
 }
 
@@ -60,6 +72,15 @@ struct OverviewView: View {
             .width(80)
           TableColumn("For") { Text(Format.span(from: $0.hotSince, to: model.now)) }
             .width(80)
+          TableColumn("") { tracked in
+            // Only what can be cleaned up gets a command. The rest is shown, nothing more.
+            if let command = tracked.culprit.cleanupCommand {
+              Button(command) { model.propose { $0.ending(tracked.culprit) } }
+                .buttonStyle(.link)
+                .accessibilityIdentifier("culprit.clean-up")
+            }
+          }
+          .width(110)
         }
       }
     }

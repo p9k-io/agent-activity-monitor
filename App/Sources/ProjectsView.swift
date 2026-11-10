@@ -73,6 +73,17 @@ private struct SessionRow: View {
           .monospacedDigit()
           .foregroundStyle(.secondary)
           .frame(width: 36, alignment: .trailing)
+        Button("End…") { model.propose { $0.ending(group.session.id) } }
+          .buttonStyle(.link)
+          .help("End this Session and everything it started")
+          .accessibilityLabel("End Session")
+          .accessibilityIdentifier("session.end")
+      }
+      .contextMenu {
+        Button("End Session…") { model.propose { $0.ending(group.session.id) } }
+        if let command = group.session.resumeCommand {
+          Button("Copy Resume Command") { Pasteboard.copy(command) }
+        }
       }
     }
   }

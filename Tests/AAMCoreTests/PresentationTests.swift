@@ -44,7 +44,34 @@ struct PresentationTests {
     #expect(StaleFinding.Reason.serverIdle(since: epoch).text(now: now) == "no CPU use for 3h 0m")
   }
 
+  @Test(arguments: [
+    (CleanupRequest.Outcome(ended: 5, killed: 0, survived: 0, refused: 0), "5 exited."),
+    (
+      CleanupRequest.Outcome(ended: 5, killed: 1, survived: 2, refused: 3),
+      "5 exited, 1 ended by force, 2 still running, 3 left alone."
+    ),
+    (CleanupRequest.Outcome(ended: 0, killed: 0, survived: 0, refused: 2), "2 left alone."),
+    (CleanupRequest.Outcome(ended: 0, killed: 0, survived: 0, refused: 0), "Nothing was ended."),
+  ])
+  func `what a Cleanup did is told in the numbers that are not zero`(
+    outcome: CleanupRequest.Outcome, expected: String
+  ) {
+    #expect(outcome.text == expected)
+  }
+
+  @Test func `why a process is left alone reads after its identifier`() {
+    #expect(CleanupPlan.Reason.gone.explanation == "there is no such process any more")
+    #expect(CleanupPlan.Reason.notYours.explanation == "it belongs to another user")
+    #expect(CleanupPlan.Reason.protected.explanation == "it must never be ended")
+    #expect(
+      CleanupPlan.Reason.zombie.explanation
+        == "it has ended already and waits to be collected by its parent")
+  }
+
   @Test func `kinds and states have names a person reads`() {
+    #expect(HarnessID.claudeCode.label == "Claude Code")
+    #expect(HarnessID.codex.label == "Codex")
+    #expect(HarnessID(rawValue: "other-tool").label == "other-tool")
     #expect(StaleFinding.Kind.ownerlessLeftover.label == "Ownerless leftover")
     #expect(StaleFinding.Kind.idleDevServer.label == "Idle dev server")
     #expect(SessionState.background.label == "Background work")

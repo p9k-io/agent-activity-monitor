@@ -21,6 +21,7 @@ public struct SimulatorLinker: InducedLoadLinker {
       let device = deviceIdentifier(of: root)
       return InducedLoad(
         id: "simulator:\(device ?? String(root.pid))",
+        kind: .simulator(device: device),
         title: device.flatMap(deviceName).map { "iOS Simulator · \($0)" } ?? "iOS Simulator",
         processes: [root.key] + tree.descendants(of: root.pid).map(\.key))
     }

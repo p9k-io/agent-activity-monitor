@@ -139,3 +139,17 @@ extension StaleReport {
     return lines.joined(separator: "\n")
   }
 }
+
+extension RequestsReport {
+  func table(now: Date) -> String {
+    columns(
+      ["ID", "STATUS", "FILED", "BY", "PROCS", "OUTCOME", "REASON"],
+      requests.map { row in
+        [
+          row.id, row.status, "\(age(of: row.createdAt, now: now)) ago",
+          row.requester ?? "-", String(row.pids.count), row.outcome?.text ?? "-",
+          row.reason.isEmpty ? "-" : row.reason,
+        ]
+      })
+  }
+}

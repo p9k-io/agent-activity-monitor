@@ -25,12 +25,17 @@ struct StaleView: View {
         }
       }
       .safeAreaInset(edge: .bottom) {
-        Text(
-          "A Cleanup of everything here would free \(Format.memory(model.reclaimableBytes))."
-        )
-        .font(.callout)
-        .foregroundStyle(.secondary)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        HStack {
+          Text(
+            "A Cleanup of everything here would free \(Format.memory(model.reclaimableBytes))."
+          )
+          .font(.callout)
+          .foregroundStyle(.secondary)
+          Spacer()
+          Button("Clean Up All…") { model.propose { $0.cleaningUp(model.findings) } }
+            .disabled(!model.findings.contains(where: \.canCleanUp))
+            .accessibilityIdentifier("stale.clean-up-all")
+        }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(.bar)
@@ -40,6 +45,7 @@ struct StaleView: View {
 }
 
 private struct FindingRow: View {
+  @Environment(AppModel.self) private var model
   let finding: StaleFinding
   let now: Date
 
@@ -66,6 +72,11 @@ private struct FindingRow: View {
         .monospacedDigit()
         .foregroundStyle(.secondary)
         .frame(width: 36, alignment: .trailing)
+      Button("Clean Up…") { model.propose { $0.cleaningUp([finding]) } }
+        .buttonStyle(.link)
+        .disabled(!finding.canCleanUp)
+        .opacity(finding.canCleanUp ? 1 : 0)
+        .accessibilityIdentifier("stale.clean-up")
     }
   }
 }

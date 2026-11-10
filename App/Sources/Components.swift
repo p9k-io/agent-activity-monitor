@@ -60,20 +60,7 @@ extension Culprit.Owner {
   }
 }
 
-extension HarnessID {
-  var label: String {
-    switch self {
-    case .claudeCode: "Claude Code"
-    case .codex: "Codex"
-    default: rawValue
-    }
-  }
-}
-
 extension Session {
-  /// The Session's title, or its Project's name when it has none.
-  var displayTitle: String { title ?? project.name }
-
   func lastActive(now: Date) -> String {
     if state == .working { return "now" }
     guard let lastActivityAt else { return "–" }
