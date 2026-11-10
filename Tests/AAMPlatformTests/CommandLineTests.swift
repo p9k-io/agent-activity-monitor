@@ -4,7 +4,8 @@ import Foundation
 import Testing
 
 /// Runs the built `aam` against the machine the tests run on. Everything it does to the machine
-/// is read-only, and what it remembers goes to a scratch store.
+/// is read-only, what it remembers goes to a scratch store, and the home directory it is given
+/// is an empty one, so that it reads nothing of whoever runs the tests.
 @Suite(.timeLimit(.minutes(1)))
 struct CommandLineTests {
   let scratch: TemporaryDirectory
@@ -12,6 +13,64 @@ struct CommandLineTests {
 
   init() throws {
     scratch = try TemporaryDirectory()
+    try scratch.directory("home")
+  }
+
+  /// What `aam` is started with: the scratch store, and the scratch home in place of the
+  /// real one.
+  var environment: [String: String] {
+    [
+      "AAM_STORE": store.path,
+      "CFFIXED_USER_HOME": scratch.url.appendingPathComponent("home").path,
+    ]
+  }
+
+  /// What `aam` takes for a Claude Code Session, and the process that Session started.
+  struct StartedSession {
+    static let identifier = "11111111-aaaa-4bbb-8ccc-000000000001"
+    let root: Process
+    let child: ProcessRecord
+  }
+
+  /// Starts the helper from a path that looks like Claude Code's, with the record Claude Code
+  /// would keep for it. Whether a process belongs to a Session then does not depend on where
+  /// the tests happen to run.
+  func startSession() throws -> StartedSession {
+    let program = try scratch.directory("claude/versions").appendingPathComponent("9.9.9")
+    try FileManager.default.copyItem(at: Helper.url, to: program)
+    let root = Process()
+    root.executableURL = program
+    root.arguments = ["tree", "30"]
+    try root.run()
+    try scratch.file(
+      "home/.claude/sessions/\(root.processIdentifier).json",
+      """
+      {"pid": \(root.processIdentifier), "sessionId": "\(StartedSession.identifier)",
+       "cwd": "\(scratch.url.path)", "status": "idle"}
+      """)
+    let source = SystemProcessSource(markerNames: [])
+    for _ in 0..<40 {
+      if let child = source.snapshot(refreshingOtherUsers: false).processes
+        .first(where: { $0.parentPID == root.processIdentifier })
+      {
+        return StartedSession(root: root, child: child)
+      }
+      usleep(100_000)
+    }
+    root.terminate()
+    throw CocoaError(.fileNoSuchFile)
+  }
+
+  /// Ends what `startSession` started, and the child only if it is still that process.
+  func stop(_ session: StartedSession) {
+    session.root.terminate()
+    if isRunning(session.child) {
+      kill(session.child.pid, SIGKILL)
+    }
+  }
+
+  func isRunning(_ process: ProcessRecord) -> Bool {
+    SystemProcessSource(markerNames: []).record(for: process.pid)?.key == process.key
   }
 
   func run(_ arguments: String...) throws -> (status: Int32, output: Data) {
@@ -22,7 +81,7 @@ struct CommandLineTests {
     let aam = Process()
     aam.executableURL = Helper.url.deletingLastPathComponent().appendingPathComponent("aam")
     aam.arguments = arguments
-    aam.environment = ["AAM_STORE": store.path, "HOME": NSHomeDirectory()]
+    aam.environment = environment
     let output = Pipe()
     aam.standardOutput = output
     aam.standardError = FileHandle.nullDevice
@@ -89,10 +148,21 @@ struct CommandLineTests {
 
   // MARK: Cleanup requests
 
+  @Test func `a Session is found from the record its Harness keeps in the home directory`()
+    throws
+  {
+    let session = try startSession()
+    defer { stop(session) }
+
+    let rows = try #require(try json("sessions", "--json")["sessions"] as? [[String: Any]])
+
+    #expect(rows.contains { $0["id"] as? String == "claude-code:\(StartedSession.identifier)" })
+  }
+
   @Test func `a Cleanup request is filed for a person to decide and nothing is ended`() throws {
-    let helper = try Helper.sleeping(seconds: 30)
-    defer { helper.terminate() }
-    let pid = helper.processIdentifier
+    let session = try startSession()
+    defer { stop(session) }
+    let pid = session.child.pid
 
     let filed = try json("request-cleanup", String(pid), "--reason", "left by my tests", "--json")
 
@@ -102,7 +172,7 @@ struct CommandLineTests {
     #expect(stored.id == filed["id"] as? String)
     #expect(stored.reason == "left by my tests")
     #expect(stored.targets.map(\.pid) == [pid])
-    #expect(helper.isRunning)
+    #expect(isRunning(session.child))
 
     let listed = try json("requests", "--json")
     let rows = try #require(listed["requests"] as? [[String: Any]])
@@ -187,7 +257,7 @@ struct CommandLineTests {
     let aam = Process()
     aam.executableURL = Helper.url.deletingLastPathComponent().appendingPathComponent("aam")
     aam.arguments = ["mcp"]
-    aam.environment = ["AAM_STORE": store.path, "HOME": NSHomeDirectory()]
+    aam.environment = environment
     let input = Pipe()
     let output = Pipe()
     aam.standardInput = input
@@ -233,9 +303,9 @@ struct CommandLineTests {
   }
 
   @Test func `an agent can ask for a Cleanup and nothing is ended by asking`() throws {
-    let helper = try Helper.sleeping(seconds: 30)
-    defer { helper.terminate() }
-    let pid = helper.processIdentifier
+    let session = try startSession()
+    defer { stop(session) }
+    let pid = session.child.pid
 
     let filed = try toolResult(
       try #require(
@@ -253,7 +323,7 @@ struct CommandLineTests {
     #expect(read["status"] == JSONValue.string("pending"))
     #expect(read["reason"] == JSONValue.string("left by my tests"))
     #expect(try Store(url: store).requests(status: .pending).map(\.id) == [id])
-    #expect(helper.isRunning)
+    #expect(isRunning(session.child))
   }
 
   @Test func `a tool that is given nonsense says so instead of failing the connection`() throws {
