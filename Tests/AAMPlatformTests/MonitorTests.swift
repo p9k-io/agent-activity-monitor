@@ -12,22 +12,6 @@ private struct ListedSource: ProcessSource {
   }
 }
 
-/// Treats every process named `claude` as the root of a Session in its working directory.
-private struct ClaudeLike: HarnessAdapter {
-  let harness = HarnessID.claudeCode
-  let markerNames: Set<String> = []
-
-  func sessions(in snapshot: Snapshot) -> [Session] {
-    snapshot.processes.filter { $0.name == "claude" }.map { root in
-      Session(
-        id: SessionID(harness: harness, value: "s-\(root.pid)"), root: root.key,
-        project: Project(root: root.workingDirectory ?? "/"),
-        workingDirectory: root.workingDirectory ?? "/", title: nil, state: .idle,
-        lastActivityAt: nil, resumeCommand: nil, markers: [:])
-    }
-  }
-}
-
 struct MonitorTests {
   let scratch: TemporaryDirectory
   let url: URL

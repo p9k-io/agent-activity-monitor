@@ -8,7 +8,7 @@ import Foundation
 /// and ends with `task_complete` or `turn_aborted`; whichever comes last decides the state. A
 /// long turn writes hundreds of megabytes after its start event, so the file is searched
 /// backwards for the event text and only the few matching lines are parsed.
-struct RolloutTail {
+struct RolloutTail: Sendable {
   let state: SessionState
   let lastActivityAt: Date?
 
@@ -36,6 +36,47 @@ struct RolloutTail {
     defer { try? handle.close() }
     lastActivityAt = Self.lastLineTime(in: handle, size: size)
     state = Self.lastTurnState(in: handle, size: size) ?? .unknown
+  }
+
+  private init(state: SessionState, lastActivityAt: Date?) {
+    self.state = state
+    self.lastActivityAt = lastActivityAt
+  }
+
+  /// More appended bytes than this are not worth reading forwards; the file is searched from
+  /// its end instead.
+  private static let longestAppend: UInt64 = 64 * 1024 * 1024
+
+  /// What the rollout says after it grew from `start` to `end` bytes. Only the appended part is
+  /// read: the last turn event in it decides the state, and without one the state stands.
+  func advanced(path: String, from start: UInt64, to end: UInt64) -> RolloutTail {
+    guard end - start <= Self.longestAppend else { return RolloutTail(path: path) }
+    guard let handle = FileHandle(forReadingAtPath: path) else { return self }
+    defer { try? handle.close() }
+    // Starting a little early catches a line or an event text that was half written before.
+    let overlap = UInt64(max(Self.turnEvents.map(\.text.count).max() ?? 0, Self.lineStart.count))
+    let from = start > overlap ? start - overlap : 0
+    guard let bytes = Self.read(handle, from: from, to: end) else { return self }
+
+    var state = state
+    let events = Self.turnEvents.flatMap { event in
+      Self.offsets(of: event.text, in: bytes).map {
+        (offset: from + UInt64($0), state: event.state)
+      }
+    }
+    for event in events.sorted(by: { $0.offset > $1.offset })
+    where Self.isTurnEvent(at: event.offset, in: handle, size: end) {
+      state = event.state
+      break
+    }
+
+    var lastActivityAt = lastActivityAt
+    if let line = Self.offsets(of: Self.lineStart, in: bytes).last,
+      let time = Self.time(at: bytes[(line + Self.lineStart.count)...])
+    {
+      lastActivityAt = time
+    }
+    return RolloutTail(state: state, lastActivityAt: lastActivityAt)
   }
 
   // MARK: Last activity

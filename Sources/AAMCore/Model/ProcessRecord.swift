@@ -65,7 +65,11 @@ public struct ProcessRecord: Sendable, Equatable, Identifiable {
 
   /// The last component of the executable path.
   public var name: String {
-    executablePath.split(separator: "/").last.map(String.init) ?? executablePath
+    // Asked for every process on every look, so it avoids splitting the whole path.
+    guard let slash = executablePath.lastIndex(of: "/") else { return executablePath }
+    let last = executablePath[executablePath.index(after: slash)...]
+    if !last.isEmpty { return String(last) }
+    return executablePath.split(separator: "/").last.map(String.init) ?? executablePath
   }
 }
 

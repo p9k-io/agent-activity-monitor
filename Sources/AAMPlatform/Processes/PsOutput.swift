@@ -1,52 +1,33 @@
-import AAMCore
 import Foundation
 
-/// Reads the output of `ps`, the only public way to see processes of other users.
-public enum PsOutput {
-  /// The columns `parse` expects, in order. `comm` is last because it may contain spaces.
-  public static let columns = "pid=,ppid=,pgid=,uid=,rss=,time=,state=,tty=,lstart=,comm="
+/// What `ps` knows about a process that nothing else tells an unprivileged caller about the
+/// processes of other users.
+public struct PsFacts: Sendable, Equatable {
+  public let residentBytes: UInt64
+  public let cpuTime: Duration
+  public let executablePath: String
+}
 
-  private static let months = [
-    "Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
-    "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12,
-  ]
+/// Reads the output of `ps`, the only public way to see the CPU time and memory of processes
+/// of other users.
+public enum PsOutput {
+  /// The columns `parse` expects, in order. `comm` is last because it may contain spaces. The
+  /// list is short on purpose: `ps` takes four times as long when asked for more.
+  public static let columns = "pid=,rss=,time=,comm="
 
   /// Lines that do not have the expected shape are skipped.
-  public static func parse(_ output: String, timeZone: TimeZone = .current) -> [ProcessRecord] {
-    var calendar = Calendar(identifier: .gregorian)
-    calendar.timeZone = timeZone
-    return output.split(separator: "\n").compactMap { record(from: $0, calendar: calendar) }
-  }
-
-  private static func record(from line: Substring, calendar: Calendar) -> ProcessRecord? {
-    let fields = line.split(maxSplits: 13, omittingEmptySubsequences: true) { $0 == " " }
-    guard
-      fields.count == 14,
-      let pid = Int32(fields[0]),
-      let parent = Int32(fields[1]),
-      let group = Int32(fields[2]),
-      let user = UInt32(fields[3]),
-      let residentKilobytes = UInt64(fields[4]),
-      let cpuTime = duration(fields[5]),
-      let startedAt = date(
-        month: fields[9], day: fields[10], time: fields[11], year: fields[12], calendar: calendar)
-    else { return nil }
-
-    return ProcessRecord(
-      pid: pid,
-      parentPID: parent,
-      groupID: group,
-      userID: user,
-      startedAt: startedAt,
-      executablePath: fields[13].trimmingCharacters(in: .whitespaces),
-      arguments: [],
-      workingDirectory: nil,
-      cpuTime: cpuTime,
-      residentBytes: residentKilobytes * 1024,
-      isZombie: fields[6].hasPrefix("Z"),
-      hasTerminal: fields[7] != "??",
-      markers: [:]
-    )
+  public static func parse(_ output: String) -> [Int32: PsFacts] {
+    var facts: [Int32: PsFacts] = [:]
+    for line in output.split(separator: "\n") {
+      let fields = line.split(maxSplits: 3, omittingEmptySubsequences: true) { $0 == " " }
+      guard fields.count == 4, let pid = Int32(fields[0]), let kilobytes = UInt64(fields[1]),
+        let cpuTime = duration(fields[2])
+      else { continue }
+      facts[pid] = PsFacts(
+        residentBytes: kilobytes * 1024, cpuTime: cpuTime,
+        executablePath: fields[3].trimmingCharacters(in: .whitespaces))
+    }
+    return facts
   }
 
   /// Reads `[[dd-]hh:]mm:ss.cc`.
@@ -59,10 +40,9 @@ public enum PsOutput {
       rest = rest[rest.index(after: dash)...]
     }
     let parts = rest.split(separator: ":")
-    guard (2...3).contains(parts.count), let seconds = Double(parts[parts.count - 1]) else {
-      return nil
-    }
-    guard let minutes = Int64(parts[parts.count - 2]) else { return nil }
+    guard (2...3).contains(parts.count), let seconds = Double(parts[parts.count - 1]),
+      let minutes = Int64(parts[parts.count - 2])
+    else { return nil }
     var hours: Int64 = 0
     if parts.count == 3 {
       guard let parsed = Int64(parts[0]) else { return nil }
@@ -71,20 +51,31 @@ public enum PsOutput {
     let whole = ((days * 24 + hours) * 60 + minutes) * 60
     return .seconds(whole) + .milliseconds(Int64((seconds * 1000).rounded()))
   }
+}
 
-  private static func date(
-    month: Substring,
-    day: Substring,
-    time: Substring,
-    year: Substring,
-    calendar: Calendar
-  ) -> Date? {
-    let clock = time.split(separator: ":").compactMap { Int($0) }
-    guard let month = months[String(month)], let day = Int(day), let year = Int(year),
-      clock.count == 3
-    else { return nil }
-    return calendar.date(
-      from: DateComponents(
-        year: year, month: month, day: day, hour: clock[0], minute: clock[1], second: clock[2]))
+/// Runs `/bin/ps`, which is setuid root and therefore sees every process.
+enum PsRunner {
+  /// The facts about the processes of the given users. Asking only about them costs a
+  /// fraction of asking about everyone.
+  static func facts(ofUsers users: Set<UInt32>) -> [Int32: PsFacts] {
+    guard !users.isEmpty else { return [:] }
+    let ps = Process()
+    ps.executableURL = URL(fileURLWithPath: "/bin/ps")
+    ps.arguments = [
+      "-x", "-U", users.sorted().map(String.init).joined(separator: ","), "-o", PsOutput.columns,
+    ]
+    // Number formats must not depend on the user's locale.
+    ps.environment = ["LC_ALL": "C"]
+    let output = Pipe()
+    ps.standardOutput = output
+    ps.standardError = FileHandle.nullDevice
+    do {
+      try ps.run()
+    } catch {
+      return [:]
+    }
+    let data = output.fileHandleForReading.readDataToEndOfFile()
+    ps.waitUntilExit()
+    return PsOutput.parse(String(decoding: data, as: UTF8.self))
   }
 }

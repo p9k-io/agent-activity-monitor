@@ -21,6 +21,21 @@ public struct Usage: Sendable {
     percentByKey = percent
   }
 
+  /// A measurement given directly, for processes measured some other way.
+  public init(_ percentByKey: [ProcessRecord.Key: Double]) {
+    self.percentByKey = percentByKey
+  }
+
+  /// This measurement for the processes `includes` accepts, and nothing for the rest.
+  public func limited(to includes: (ProcessRecord.Key) -> Bool) -> Usage {
+    Usage(percentByKey.filter { includes($0.key) })
+  }
+
+  /// Both measurements together. Where both know a process, `other` wins.
+  public func merging(_ other: Usage) -> Usage {
+    Usage(percentByKey.merging(other.percentByKey) { _, theirs in theirs })
+  }
+
   /// Zero for a process that was not in the earlier snapshot: nothing has been measured yet.
   public func cpuPercent(of key: ProcessRecord.Key) -> Double {
     percentByKey[key] ?? 0

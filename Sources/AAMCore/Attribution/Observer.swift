@@ -34,7 +34,11 @@ public struct Observer: Sendable {
   /// - Parameter memory: What earlier looks found. It lets a process be attributed after the
   ///   process table no longer links it to its Session.
   public func observe(remembering memory: Memory = .empty) -> Observation {
-    let snapshot = source.snapshot()
+    observe(source.snapshot(), remembering: memory)
+  }
+
+  /// Sorts a snapshot that was taken already.
+  public func observe(_ snapshot: Snapshot, remembering memory: Memory = .empty) -> Observation {
     let sessions = adapters.flatMap { $0.sessions(in: snapshot) }
     return Observation(
       snapshot: snapshot,

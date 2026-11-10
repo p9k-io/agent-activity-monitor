@@ -96,6 +96,22 @@ struct WebContentLinkerTests {
         .inducedLoad(in: snapshot).isEmpty)
   }
 
+  @Test func `the application of a web content process is looked up once`() {
+    let files = CountingFiles(mapped: [
+      10: ["/Users/dev/Library/WebKit/com.example.terminal/db"],
+      11: ["/usr/lib/dyld"],
+    ])
+    let linker = WebContentLinker(files: files)
+    let snapshot = Snapshot.of(.make(10, path: renderer), .make(11, path: renderer))
+
+    let first = linker.inducedLoad(in: snapshot)
+    let second = linker.inducedLoad(in: snapshot)
+
+    #expect(first == second)
+    #expect(first.map(\.id) == ["web-content:com.example.terminal"])
+    #expect(files.timesAsked == 2)
+  }
+
   @Test func `other processes are not asked for their files`() {
     let snapshot = Snapshot.of(.make(20, path: "/opt/bin/node"))
 

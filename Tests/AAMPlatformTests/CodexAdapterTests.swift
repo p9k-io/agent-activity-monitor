@@ -122,6 +122,85 @@ struct CodexAdapterTests {
     #expect(session.state == .idle)
   }
 
+  func append(_ lines: [String], to path: String) throws {
+    let handle = try #require(FileHandle(forWritingAtPath: path))
+    defer { try? handle.close() }
+    try handle.seekToEnd()
+    try handle.write(contentsOf: Data((lines.joined(separator: "\n") + "\n").utf8))
+  }
+
+  @Test func `a rollout that did not grow is not read a second time`() throws {
+    let path = try rollout(thread, events: [event("task_started", at: "08:01:00")])
+    let adapter = adapter(open: [5100: [path]])
+    #expect(adapter.sessions(in: .of(codex)).first?.state == .working)
+    try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: path)
+    defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path) }
+
+    #expect(adapter.sessions(in: .of(codex)).first?.state == .working)
+  }
+
+  @Test func `when a rollout grows, what was appended decides the state`() throws {
+    let path = try rollout(thread, events: [event("task_started", at: "08:01:00")])
+    let adapter = adapter(open: [5100: [path]])
+    #expect(adapter.sessions(in: .of(codex)).first?.state == .working)
+
+    try append([toolOutput("x"), event("task_complete", at: "08:09:00")], to: path)
+    let session = try #require(adapter.sessions(in: .of(codex)).first)
+
+    #expect(session.state == .idle)
+    #expect(session.lastActivityAt == (try Date("2026-01-05T08:09:00Z", strategy: .iso8601)))
+  }
+
+  @Test func `only what was appended to a rollout is read`() throws {
+    let started = event("task_started", at: "08:01:00")
+    let path = try rollout(thread, events: [started])
+    let adapter = adapter(open: [5100: [path]])
+    #expect(adapter.sessions(in: .of(codex)).first?.state == .working)
+
+    // Blank out the turn event that was already read, then let the file grow. Reading the
+    // whole file again would no longer find a turn.
+    let original = try String(contentsOfFile: path, encoding: .utf8)
+    let blanked = original.replacingOccurrences(
+      of: started, with: String(repeating: " ", count: started.utf8.count))
+    try Data(blanked.utf8).write(to: URL(fileURLWithPath: path))
+    try append([toolOutput("more output", at: "08:03:00")], to: path)
+    let session = try #require(adapter.sessions(in: .of(codex)).first)
+
+    #expect(session.state == .working)
+    #expect(session.lastActivityAt == (try Date("2026-01-05T08:03:00Z", strategy: .iso8601)))
+  }
+
+  @Test func `a rollout that became shorter is read from the start`() throws {
+    let path = try rollout(
+      thread,
+      events: [
+        event("task_started", at: "08:01:00"), toolOutput(String(repeating: "x", count: 500)),
+      ])
+    let adapter = adapter(open: [5100: [path]])
+    #expect(adapter.sessions(in: .of(codex)).first?.state == .working)
+
+    _ = try rollout(thread, events: [event("task_complete", at: "08:02:00")])
+
+    #expect(adapter.sessions(in: .of(codex)).first?.state == .idle)
+  }
+
+  @Test func `thread names are read again only when the index changes`() throws {
+    let path = try rollout(thread, events: [])
+    let index = try home.file(
+      ".codex/session_index.jsonl", "{\"id\":\"\(thread)\",\"thread_name\":\"First name\"}\n")
+    let adapter = adapter(open: [5100: [path]])
+    #expect(adapter.sessions(in: .of(codex)).first?.title == "First name")
+
+    try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: index.path)
+    #expect(adapter.sessions(in: .of(codex)).first?.title == "First name")
+    try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: index.path)
+
+    try home.file(
+      ".codex/session_index.jsonl",
+      "{\"id\":\"\(thread)\",\"thread_name\":\"A second, longer name\"}\n")
+    #expect(adapter.sessions(in: .of(codex)).first?.title == "A second, longer name")
+  }
+
   @Test func `a Codex process without a thread and without a terminal is not a Session`() {
     let daemon = ProcessRecord.make(
       5200, path: "/opt/tools/bin/codex", arguments: ["codex", "app-server"], terminal: false)

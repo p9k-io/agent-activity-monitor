@@ -1,21 +1,36 @@
 import AAMCore
+import Synchronization
 
 /// WebKit runs the pages of every application in helper processes started by the system, so
 /// the process table does not say whose they are. The storage a helper uses does: it lives in
 /// `~/Library/WebKit/<application>`, and the helper has files from it mapped or open.
-public struct WebContentLinker: InducedLoadLinker {
+public final class WebContentLinker: InducedLoadLinker {
   private let files: any OpenFileListing
+  /// The application of each helper, once looked up. Finding it means walking the helper's
+  /// memory map, and a helper does not change hands.
+  private let owners = Mutex<[ProcessRecord.Key: String?]>([:])
 
   public init(files: any OpenFileListing = LibprocOpenFiles()) {
     self.files = files
   }
 
   public func inducedLoad(in snapshot: Snapshot) -> [InducedLoad] {
+    let helpers = snapshot.processes.filter { $0.name.hasPrefix("com.apple.WebKit.") }
     var members: [String: [ProcessRecord.Key]] = [:]
-    for process in snapshot.processes where process.name.hasPrefix("com.apple.WebKit.") {
-      guard let owner = owner(of: process.pid) else { continue }
-      members[owner, default: []].append(process.key)
+    for helper in helpers {
+      let owner: String?
+      if let known = owners.withLock({ $0[helper.key] }) {
+        owner = known
+      } else {
+        owner = self.owner(of: helper.pid)
+        owners.withLock { $0[helper.key] = .some(owner) }
+      }
+      if let owner {
+        members[owner, default: []].append(helper.key)
+      }
     }
+    let alive = Set(helpers.map(\.key))
+    owners.withLock { known in known = known.filter { alive.contains($0.key) } }
     return members.sorted { $0.key < $1.key }.map { owner, processes in
       InducedLoad(
         id: "web-content:\(owner)", title: "Web content of \(owner)", processes: processes)

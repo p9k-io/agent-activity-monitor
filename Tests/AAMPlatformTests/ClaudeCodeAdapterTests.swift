@@ -117,4 +117,24 @@ struct ClaudeCodeAdapterTests {
 
     #expect(adapter.sessions(in: .of(node)).isEmpty)
   }
+
+  @Test func `a record that did not change is not read a second time`() throws {
+    try record(pid: 4100, "\"sessionId\": \"s\", \"cwd\": \"/work/alpha\", \"status\": \"idle\"")
+    #expect(adapter.sessions(in: .of(claude)).first?.state == .idle)
+    let file = home.url.appendingPathComponent(".claude/sessions/4100.json").path
+    try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: file)
+    defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file) }
+
+    #expect(adapter.sessions(in: .of(claude)).first?.state == .idle)
+  }
+
+  @Test func `a record that changed is read again`() throws {
+    try record(pid: 4100, "\"sessionId\": \"s\", \"cwd\": \"/work/alpha\", \"status\": \"idle\"")
+    #expect(adapter.sessions(in: .of(claude)).first?.state == .idle)
+
+    try record(
+      pid: 4100, "\"sessionId\": \"s\", \"cwd\": \"/work/alpha\", \"status\": \"busy\", \"n\": 1")
+
+    #expect(adapter.sessions(in: .of(claude)).first?.state == .working)
+  }
 }
