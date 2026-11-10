@@ -20,6 +20,7 @@ struct MainWindow: View {
         case .projects: ProjectsView()
         case .stale: StaleView()
         case .requests: RequestsView()
+        case .reports: ReportsView()
         }
       }
       .navigationTitle(model.section.rawValue)
@@ -35,7 +36,7 @@ struct MainWindow: View {
     switch section {
     case .stale: model.findings.count
     case .requests: model.pendingRequests.count
-    case .overview, .projects: 0
+    case .overview, .projects, .reports: 0
     }
   }
 }

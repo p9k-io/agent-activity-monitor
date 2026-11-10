@@ -6,6 +6,7 @@ struct SettingsView: View {
   @Environment(AppModel.self) private var model
   @State private var launchesAtLogin = SMAppService.mainApp.status == .enabled
   @State private var loginItemProblem: String?
+  @State private var alertProblem: String?
 
   var body: some View {
     @Bindable var model = model
@@ -40,6 +41,37 @@ struct SettingsView: View {
           Stepper(
             "\(Int(model.settings.culpritThreshold)) % of one core",
             value: $model.settings.culpritThreshold, in: 5...200, step: 5)
+        }
+      }
+
+      Section("Alerts") {
+        Toggle("Tell me when something keeps using CPU", isOn: $model.settings.alertsEnabled)
+          .onChange(of: model.settings.alertsEnabled) { _, wanted in
+            guard wanted else { return }
+            Task {
+              // Without permission there is nothing to switch on.
+              if await !Notifier.askPermission() {
+                model.settings.alertsEnabled = false
+                alertProblem = "Notifications are not allowed for this app in System Settings."
+              } else {
+                alertProblem = nil
+              }
+            }
+          }
+        if let alertProblem {
+          Text(alertProblem)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        LabeledContent("After") {
+          Stepper(
+            "\(Int(model.settings.alertAfterMinutes)) min",
+            value: $model.settings.alertAfterMinutes, in: 5...120, step: 5)
+        }
+        LabeledContent("From") {
+          Stepper(
+            "\(Int(model.settings.alertAboveCPU)) % of one core",
+            value: $model.settings.alertAboveCPU, in: 25...800, step: 25)
         }
       }
 

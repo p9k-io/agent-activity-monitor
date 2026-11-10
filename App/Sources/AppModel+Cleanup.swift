@@ -67,6 +67,22 @@ extension AppModel {
     record(decided)
   }
 
+  /// Where CPU time went over the last days, or nil when the store cannot be read.
+  func usageReport(days: Int) async -> UsageReport? {
+    #if DEBUG
+      if isDemo { return DemoData.report }
+    #endif
+    guard let store else { return nil }
+    return await Self.report(from: store, since: Date().addingTimeInterval(-Double(days) * 86_400))
+  }
+
+  @concurrent
+  nonisolated private static func report(from store: Store, since start: Date) async
+    -> UsageReport?
+  {
+    try? store.usageReport(since: start)
+  }
+
   // Ending processes waits for them to exit and shutting a simulator down waits for a tool,
   // so both are kept off the main thread.
 

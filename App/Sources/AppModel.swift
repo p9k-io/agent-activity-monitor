@@ -10,6 +10,7 @@ enum MainSection: String, CaseIterable, Identifiable {
   case projects = "Projects"
   case stale = "Stale"
   case requests = "Requests"
+  case reports = "Reports"
 
   var id: Self { self }
 
@@ -19,6 +20,7 @@ enum MainSection: String, CaseIterable, Identifiable {
     case .projects: "folder"
     case .stale: "leaf"
     case .requests: "tray"
+    case .reports: "chart.bar"
     }
   }
 }
@@ -57,6 +59,8 @@ final class AppModel {
   /// The only thing in the app that ends processes, and only after a person confirmed.
   let terminator = Terminator(source: SystemProcessSource(markerNames: []))
 
+  /// Decides when load that does not stop is worth a notification.
+  private var alerts = LoadAlerts(after: .seconds(900))
   /// How many views are showing live data right now.
   private var watchers = 0
   private let sampler: Sampler
@@ -125,6 +129,20 @@ final class AppModel {
     thermalState = ProcessInfo.processInfo.thermalState
     if let store {
       requests = (try? store.requests()) ?? []
+    }
+    alert(about: sample)
+  }
+
+  /// Tells about load that has gone on for too long, when the person asked to be told.
+  private func alert(about sample: Sample) {
+    alerts.after = .seconds(settings.alertAfterMinutes * 60)
+    alerts.above = settings.alertAboveCPU
+    // Asked on every look, so that a stretch that began while alerts were off is not told
+    // about the moment they are switched on.
+    let due = alerts.due(sample.culprits, now: sample.takenAt)
+    guard settings.alertsEnabled else { return }
+    for tracked in due {
+      Notifier.post(LoadAlerts.text(for: tracked, now: sample.takenAt), id: tracked.id)
     }
   }
 
