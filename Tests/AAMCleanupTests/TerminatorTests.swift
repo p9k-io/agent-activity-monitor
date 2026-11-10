@@ -137,6 +137,12 @@ struct SimulatorControlTests {
     #expect(!ran)
   }
 
+  @Test func `Xcode's tool is run and its exit status is passed on`() {
+    // Asking the tool for its version or for something it does not know changes nothing.
+    #expect(SimulatorControl.xcrun(["--version"]) == 0)
+    #expect(SimulatorControl.xcrun(["--no-such-option"]) != 0)
+  }
+
   @Test func `a failed shutdown is reported`() {
     #expect(!SimulatorControl { _ in 1 }.shutDown(device: "AAAAAAAA-1111-4222-8333-BBBBBBBBBBBB"))
   }

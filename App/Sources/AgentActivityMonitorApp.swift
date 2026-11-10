@@ -21,6 +21,10 @@ struct AgentActivityMonitorApp: App {
     } label: {
       Image(systemName: model.gaugeSymbol)
         .accessibilityLabel("Agent Activity Monitor")
+      // Cleanup requests that wait for a decision are counted next to the gauge.
+      if !model.pendingRequests.isEmpty {
+        Text("\(model.pendingRequests.count)")
+      }
     }
     .menuBarExtraStyle(.window)
 

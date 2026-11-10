@@ -18,6 +18,13 @@ public struct CleanupProposal: Sendable, Equatable, Identifiable {
     public let session: Session?
 
     public var id: ProcessRecord.Key { process.key }
+
+    /// What to call the process. The root of a Session is called by its Harness, because its
+    /// file may be named after nothing but a version.
+    public var name: String {
+      if kind == .harness, let session { return session.id.harness.label }
+      return process.name
+    }
   }
 
   /// How to reopen a Session the Cleanup would end.

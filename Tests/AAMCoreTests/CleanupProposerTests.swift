@@ -49,6 +49,8 @@ struct CleanupProposerTests {
     #expect(proposal.means == .endProcesses)
     #expect(proposal.targets.map(\.process.pid) == [100, 101, 102])
     #expect(proposal.targets.map(\.kind) == [.harness, .other, .other])
+    // The root of a Session is called by its Harness, not by the name of its file.
+    #expect(proposal.targets.map(\.name) == ["Claude Code", "node", "esbuild"])
     #expect(proposal.targets.allSatisfy { $0.session?.id == session().id })
     #expect(proposal.residentBytes == 600)
     #expect(proposal.cautions.isEmpty)
@@ -190,6 +192,19 @@ struct CleanupProposerTests {
       ])
   }
 
+  @Test func `the same caution is given once, however many findings it is about`() throws {
+    let other = ProcessRecord.make(103, parent: 100, path: "/opt/bin/node")
+    let first = finding(
+      .ownerlessLeftover, .olderDuplicate(of: 150), session: session().id, [server])
+    let second = finding(
+      .ownerlessLeftover, .olderDuplicate(of: 151), session: session().id, [other])
+
+    let proposal = try #require(
+      proposer([root, server, other], sessions: [session()]).cleaningUp([first, second]))
+
+    #expect(proposal.cautions.count == 1)
+  }
+
   // MARK: Culprits
 
   @Test func `the web content of an application can be ended`() throws {
@@ -289,9 +304,12 @@ struct CleanupProposerTests {
   }
 
   @Test func `a request that would end a whole Session says so, with what the Session is doing`() {
-    let busy = session(.working)
+    let busy = session(.working, resume: "claude --resume s1")
 
     let proposal = proposer([root, server], sessions: [busy]).answering(request([root]))
+
+    // The Session can be reopened, so the command for that is offered as when a person ends it.
+    #expect(proposal.resume.map(\.command) == ["claude --resume s1"])
 
     #expect(
       proposal.cautions == [
@@ -312,6 +330,7 @@ struct CleanupProposerTests {
       proposal.cautions == [
         "Processes of the Session \"fix the build\" are among these, and it is not the one asking."
       ])
+    #expect(proposal.resume.isEmpty)
   }
 
   @Test func `a request whose processes are gone has nothing left to end`() {

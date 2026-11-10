@@ -24,6 +24,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: swift format lint --strict --recursive Package.swift Sources Tests App/Sources
       - run: scripts/check-file-length.sh
+      - run: scripts/check-boundaries.sh
 
   dep-scan:
     name: Dependency scan (osv-scanner)

@@ -101,11 +101,13 @@ public struct CleanupProposer: Sendable {
   public func answering(_ request: CleanupRequest) -> CleanupProposal {
     let plan = planner.plan(for: request.targets, in: reading.snapshot)
     var cautions: [String] = []
+    var ended: [Session] = []
     var seen: Set<SessionID> = []
     for session in plan.targets.compactMap({ places[$0.pid]?.session })
     where seen.insert(session.id).inserted {
       let name = quoted(session.displayTitle)
       if plan.targets.contains(where: { $0.key == session.root }) {
+        ended.append(session)
         cautions.append("This ends the whole Session \(name).")
         if let caution = stateCaution(session) { cautions.append(caution) }
       } else if session.id != request.requester {
@@ -120,6 +122,7 @@ public struct CleanupProposer: Sendable {
       cautions: cautions,
       asked: request.targets,
       plan: plan,
+      resume: ended.compactMap(resume),
       request: request)
   }
 
@@ -191,7 +194,10 @@ public struct CleanupProposer: Sendable {
     means: CleanupProposal.Means = .endProcesses, asked: [ProcessRecord.Key], plan: CleanupPlan,
     resume: [CleanupProposal.Resume] = [], request: CleanupRequest? = nil
   ) -> CleanupProposal {
-    CleanupProposal(
+    // Several findings can call for the same caution. It is given once.
+    var given: Set<String> = []
+    let cautions = cautions.filter { given.insert($0).inserted }
+    return CleanupProposal(
       id: id, title: title, message: message, cautions: cautions, means: means, asked: asked,
       targets: plan.targets.map { process in
         let place = places[process.pid]

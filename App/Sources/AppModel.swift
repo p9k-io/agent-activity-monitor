@@ -1,3 +1,4 @@
+import AAMCleanup
 import AAMCore
 import AAMPlatform
 import Foundation
@@ -8,6 +9,7 @@ enum MainSection: String, CaseIterable, Identifiable {
   case overview = "Overview"
   case projects = "Projects"
   case stale = "Stale"
+  case requests = "Requests"
 
   var id: Self { self }
 
@@ -16,6 +18,7 @@ enum MainSection: String, CaseIterable, Identifiable {
     case .overview: "gauge.with.dots.needle.50percent"
     case .projects: "folder"
     case .stale: "leaf"
+    case .requests: "tray"
     }
   }
 }
@@ -25,6 +28,12 @@ enum MainSection: String, CaseIterable, Identifiable {
 final class AppModel {
   private(set) var sample: Sample?
   private(set) var thermalState = ProcessInfo.processInfo.thermalState
+  /// Cleanup requests, the oldest first.
+  private(set) var requests: [CleanupRequest] = []
+  /// Words a Cleanup of what the latest sample shows.
+  private(set) var proposer: CleanupProposer?
+  /// The Cleanup a person is looking at: proposed, being carried out or finished.
+  var cleanup: CleanupFlow?
   /// The section the window shows. `-section stale` on the command line chooses where it opens.
   var section =
     UserDefaults.standard.string(forKey: "section")
@@ -40,6 +49,14 @@ final class AppModel {
     }
   }
 
+  /// True when the app shows made-up data instead of this machine: `-demo YES`, debug builds
+  /// only. Nothing is read from the machine or the store then.
+  let isDemo: Bool
+  /// Shared with the Sampler. Cleanup requests are read from it and decided in it.
+  let store: Store?
+  /// The only thing in the app that ends processes, and only after a person confirmed.
+  let terminator = Terminator(source: SystemProcessSource(markerNames: []))
+
   /// How many views are showing live data right now.
   private var watchers = 0
   private let sampler: Sampler
@@ -50,8 +67,24 @@ final class AppModel {
     watchers > 0 ? .seconds(3) : .seconds(10)
   }
 
-  init(sampler: Sampler = .system()) {
+  init() {
+    #if DEBUG
+      isDemo = UserDefaults.standard.bool(forKey: "demo")
+    #else
+      isDemo = false
+    #endif
+    let store = isDemo ? nil : try? Store(url: Store.defaultURL)
+    self.store = store
+    let sampler = Sampler.system(store: store)
     self.sampler = sampler
+    #if DEBUG
+      if isDemo {
+        let sample = DemoData.sample()
+        show(sample)
+        requests = DemoData.requests(for: sample)
+        return
+      }
+    #endif
     let samplerSettings = settings.samplerSettings
     Task {
       await sampler.update(samplerSettings)
@@ -74,7 +107,8 @@ final class AppModel {
   }
 
   /// Starts the loop over, with a look right away.
-  private func run() {
+  func run() {
+    guard !isDemo else { return }
     loop?.cancel()
     loop = Task {
       while !Task.isCancelled {
@@ -87,8 +121,24 @@ final class AppModel {
   private func look() async {
     let sample = await sampler.tick()
     guard !Task.isCancelled else { return }
-    self.sample = sample
+    show(sample)
     thermalState = ProcessInfo.processInfo.thermalState
+    if let store {
+      requests = (try? store.requests()) ?? []
+    }
+  }
+
+  private func show(_ sample: Sample) {
+    self.sample = sample
+    proposer = CleanupProposer(reading: sample.observation, planner: terminator.planner)
+  }
+
+  /// Records what was decided about a Cleanup request, in the store and in what is on show.
+  func record(_ decided: CleanupRequest) {
+    try? store?.update(decided)
+    if let index = requests.firstIndex(where: { $0.id == decided.id }) {
+      requests[index] = decided
+    }
   }
 
   // MARK: What the views read

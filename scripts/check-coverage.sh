@@ -25,5 +25,6 @@ check() {
 
 check AAMCore 90
 check AAMPlatform 70
+check AAMCleanup 90
 
 exit $failed

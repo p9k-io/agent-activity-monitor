@@ -31,11 +31,25 @@ aam ps          # processes grouped by Project and Session, each with its Eviden
 aam culprits    # what is consuming CPU right now and whom it belongs to
 aam stale       # what is no longer needed, and why
 aam mine        # the Session this command runs in and what is attributed to it
+
+aam request-cleanup 4242 --reason "left over from my test run"
+aam requests    # Cleanup requests and what was decided about them
 ```
 
-`aam` never ends a process.
+`aam` never ends a process. A Session that wants something gone files a Cleanup request, and a person decides about it in the app.
 
 What `aam` and the app remember (which process belonged to which Session, and when a Session ended) is kept in `~/Library/Application Support/io.p9k.agent-activity-monitor/aam.sqlite`. Set `AAM_STORE` to keep it somewhere else.
+
+## Cleanup
+
+Nothing is ended without a dialog that lists it first. The dialog shows every process a Cleanup would end, how much memory that frees, what is left alone and why, and what you should know before you say yes: that a Session is working right now, or that an older copy of a server is only probably left behind.
+
+- **Stale** offers a Cleanup for each finding, or for all of them at once.
+- **Projects** ends a Session with everything attributed to it and gives you the command that reopens it.
+- **Overview** shuts a simulator down with Xcode's own tool and ends the web content of an application. Virtual machines and system processes are only shown.
+- **Requests** lists what Sessions and scripts asked for. Approve or deny each one.
+
+Each process is asked to exit. What has not exited after 5 seconds is ended by force. Only your own processes can be ended, never the app itself or what it runs under, and a process identifier that now belongs to another process is never touched.
 
 ## Principles
 
@@ -58,7 +72,7 @@ The app is generated with [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`br
 scripts/run-app.sh -showWindow YES
 ```
 
-builds it and runs it with its window open. Without the argument it starts in the menu bar only.
+builds it and runs it with its window open. Without the argument it starts in the menu bar only. With `-demo YES` it shows made-up Sessions instead of your machine, which is how to look around without anything real at stake.
 
 ## Documentation
 

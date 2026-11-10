@@ -19,6 +19,18 @@ public struct Sample: Sendable {
   public let inducedLoad: [InducedLoad]
   public let findings: [StaleFinding]
 
+  public init(
+    observation: Reading, usage: Usage, memory: Memory, culprits: [TrackedCulprit],
+    inducedLoad: [InducedLoad], findings: [StaleFinding]
+  ) {
+    self.observation = observation
+    self.usage = usage
+    self.memory = memory
+    self.culprits = culprits
+    self.inducedLoad = inducedLoad
+    self.findings = findings
+  }
+
   public var takenAt: Date { observation.snapshot.takenAt }
 }
 

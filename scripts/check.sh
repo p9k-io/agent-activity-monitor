@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 
 swift format lint --strict --recursive Package.swift Sources Tests App/Sources
 scripts/check-file-length.sh
+scripts/check-boundaries.sh
 swift test --enable-code-coverage
 scripts/check-coverage.sh
 swift build -c release

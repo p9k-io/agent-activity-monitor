@@ -34,8 +34,9 @@ public struct Terminator: Sendable {
 
   /// The rules this Terminator ends by. A proposal made with them shows what it would do.
   public let planner: CleanupPlanner
+  /// How long a process has to exit after being asked to, before it is ended by force.
+  public let grace: Duration
   private let source: SystemProcessSource
-  private let grace: Duration
 
   /// - Parameters:
   ///   - grace: How long a process has to exit after being asked to.
