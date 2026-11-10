@@ -14,7 +14,7 @@ brew install --cask p9k-io/tap/agent-activity-monitor
 
 Or download the disk image from the [latest release](https://github.com/p9k-io/agent-activity-monitor/releases/latest) and drag the app into Applications. It needs macOS 26 on Apple silicon. The app is signed and notarized, and it asks before it starts looking for updates by itself.
 
-The app lives in the menu bar. If its gauge is not there, the menu bar has run out of room and macOS has hidden it with the other items that did not fit.
+The app lives in the menu bar. If its gauge is not there, the menu bar has run out of room and macOS has hidden it with the other items that did not fit. Open the app again and its window comes up.
 
 Homebrew also puts the command line tool, `aam`, on your path. Without Homebrew it is at `/Applications/Agent Activity Monitor.app/Contents/Helpers/aam`.
 
