@@ -12,7 +12,7 @@ extension SystemProcessSource: SamplingSource {}
 
 /// Everything one look of the Sampler found.
 public struct Sample: Sendable {
-  public let observation: Observation
+  public let observation: Reading
   public let usage: Usage
   public let memory: Memory
   public let culprits: [TrackedCulprit]

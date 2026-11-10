@@ -16,7 +16,8 @@ struct SystemParts {
     let markers = adapters.reduce(into: Set<String>()) { $0.formUnion($1.markerNames) }
     source = SystemProcessSource(markerNames: markers)
     observer = Observer(
-      source: source, adapters: adapters, linkers: [SimulatorLinker(), WebContentLinker()],
+      source: source, adapters: adapters,
+      linkers: [SimulatorLinker(), WebContentLinker(), VirtualMachineLinker()],
       projects: projects)
   }
 }

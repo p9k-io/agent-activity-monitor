@@ -13,9 +13,9 @@ struct MemoryTests {
   func observation(
     _ processes: [ProcessRecord], sessions: [Session], after seconds: TimeInterval = 0,
     memory: Memory = .empty
-  ) -> Observation {
+  ) -> Reading {
     let snapshot = Snapshot(takenAt: epoch.addingTimeInterval(seconds), processes: processes)
-    return Observation(
+    return Reading(
       snapshot: snapshot,
       sessions: sessions,
       inventory: Attributor().inventory(of: snapshot, sessions: sessions, memory: memory))

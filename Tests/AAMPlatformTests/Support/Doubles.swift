@@ -30,18 +30,22 @@ struct DeclaredOpenFiles: OpenFileListing {
 final class CountingFiles: OpenFileListing, @unchecked Sendable {
   private let lock = NSLock()
   private var asked = 0
+  let open: [Int32: [String]]
   let mapped: [Int32: [String]]
 
-  init(mapped: [Int32: [String]]) {
+  init(open: [Int32: [String]] = [:], mapped: [Int32: [String]] = [:]) {
+    self.open = open
     self.mapped = mapped
   }
 
+  /// How many times any process was asked about its open or mapped files.
   var timesAsked: Int {
     lock.withLock { asked }
   }
 
   func openFiles(of pid: Int32) -> [String] {
-    []
+    lock.withLock { asked += 1 }
+    return open[pid] ?? []
   }
 
   func firstMappedFile(of pid: Int32, where matches: (String) -> Bool) -> String? {
