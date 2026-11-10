@@ -66,6 +66,7 @@ xcodebuild archive \
   -derivedDataPath build/DerivedData \
   -quiet \
   ARCHS=arm64 \
+  ENABLE_HARDENED_RUNTIME=YES \
   CODE_SIGN_STYLE=Manual \
   CODE_SIGN_IDENTITY="$identity" \
   DEVELOPMENT_TEAM="$team"

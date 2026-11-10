@@ -49,7 +49,10 @@ targets:
         INFOPLIST_KEY_LSUIElement: YES
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
         INFOPLIST_KEY_NSHumanReadableCopyright: Copyright © 2026 Prokop Simek. MIT License.
-        ENABLE_HARDENED_RUNTIME: YES
+        # Off here and on in scripts/release.sh. With it, an ad-hoc signed build cannot load
+        # Sparkle, which carries another team's signature, and does not start. A release is
+        # signed throughout with one identity and has it.
+        ENABLE_HARDENED_RUNTIME: NO
         # Ad-hoc signing so anyone can build without a development team.
         # scripts/release.sh passes the Developer ID identity for a release.
         CODE_SIGN_STYLE: Manual
