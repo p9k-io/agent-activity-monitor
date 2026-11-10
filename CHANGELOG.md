@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/p9k-io/agent-activity-monitor/compare/v0.1.0...v0.1.1) (2026-11-10)
+
+
+### Bug Fixes
+
+* open the window when the app is opened again ([#11](https://github.com/p9k-io/agent-activity-monitor/issues/11)) ([96ea4fd](https://github.com/p9k-io/agent-activity-monitor/commit/96ea4fdbdaddbe2d297d112f9c34417b7bb63581))
+
 ## 0.1.0 (2026-11-10)
 
 
