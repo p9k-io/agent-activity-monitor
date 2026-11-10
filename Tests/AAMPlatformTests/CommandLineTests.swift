@@ -1,12 +1,25 @@
 import Foundation
 import Testing
 
-/// Runs the built `aam` against the machine the tests run on. Everything it does is read-only.
+/// Runs the built `aam` against the machine the tests run on. Everything it does to the machine
+/// is read-only, and what it remembers goes to a scratch store.
 struct CommandLineTests {
+  let scratch: TemporaryDirectory
+  var store: URL { scratch.url.appendingPathComponent("aam.sqlite") }
+
+  init() throws {
+    scratch = try TemporaryDirectory()
+  }
+
   func run(_ arguments: String...) throws -> (status: Int32, output: Data) {
+    try run(arguments)
+  }
+
+  func run(_ arguments: [String]) throws -> (status: Int32, output: Data) {
     let aam = Process()
     aam.executableURL = Helper.url.deletingLastPathComponent().appendingPathComponent("aam")
     aam.arguments = arguments
+    aam.environment = ["AAM_STORE": store.path, "HOME": NSHomeDirectory()]
     let output = Pipe()
     aam.standardOutput = output
     aam.standardError = FileHandle.nullDevice
@@ -17,17 +30,9 @@ struct CommandLineTests {
   }
 
   func json(_ arguments: String...) throws -> [String: Any] {
-    let aam = Process()
-    aam.executableURL = Helper.url.deletingLastPathComponent().appendingPathComponent("aam")
-    aam.arguments = arguments
-    let output = Pipe()
-    aam.standardOutput = output
-    aam.standardError = FileHandle.nullDevice
-    try aam.run()
-    let data = output.fileHandleForReading.readDataToEndOfFile()
-    aam.waitUntilExit()
-    #expect(aam.terminationStatus == 0)
-    return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let result = try run(arguments)
+    #expect(result.status == 0)
+    return try #require(JSONSerialization.jsonObject(with: result.output) as? [String: Any])
   }
 
   @Test func `the version is printed`() throws {
@@ -58,10 +63,24 @@ struct CommandLineTests {
     #expect(report["intervalSeconds"] as? Double == 0.2)
   }
 
+  @Test func `what is Stale is reported as JSON`() throws {
+    let report = try json("stale", "--json")
+
+    #expect(report["findings"] is [Any])
+    #expect(report["reclaimableBytes"] is Int)
+    #expect(report["activityObserved"] is Bool)
+  }
+
   @Test func `the human-readable Session list starts with its header`() throws {
     let result = try run("sessions")
 
     #expect(result.status == 0)
     #expect(String(decoding: result.output, as: UTF8.self).hasPrefix("PROJECT"))
+  }
+
+  @Test func `what a look remembers is kept where AAM_STORE points`() throws {
+    _ = try run("sessions", "--json")
+
+    #expect(FileManager.default.fileExists(atPath: store.path))
   }
 }

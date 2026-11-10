@@ -22,13 +22,14 @@ struct Culprits: ParsableCommand {
   }
 
   func run() throws {
-    let observer = Observer.system()
-    let before = observer.observe()
+    let monitor = Monitor.system()
+    let before = monitor.look()
     Thread.sleep(forTimeInterval: interval)
-    let after = observer.observe()
+    let after = monitor.look(after: before.observation).observation
     let culprits = CulpritRanker(threshold: threshold).culprits(
       in: after.inventory,
-      usage: Usage(previous: before.snapshot, current: after.snapshot)
+      usage: Usage(previous: before.observation.snapshot, current: after.snapshot),
+      inducedLoad: monitor.inducedLoad(in: after)
     )
     let report = CulpritsReport(
       takenAt: after.snapshot.takenAt, intervalSeconds: interval, culprits: culprits)

@@ -40,7 +40,16 @@ public struct CulpritRanker: Sendable {
     self.threshold = threshold
   }
 
-  public func culprits(in inventory: Inventory, usage: Usage) -> [Culprit] {
+  public func culprits(
+    in inventory: Inventory, usage: Usage, inducedLoad: [InducedLoad] = []
+  ) -> [Culprit] {
+    var loadOf: [ProcessRecord.Key: InducedLoad] = [:]
+    for load in inducedLoad {
+      for process in load.processes where loadOf[process] == nil {
+        loadOf[process] = load
+      }
+    }
+
     var candidates: [Culprit] = []
     for project in inventory.projects {
       for group in project.sessions {
@@ -53,16 +62,38 @@ public struct CulpritRanker: Sendable {
             usage: usage
           ))
       }
+      candidates += grouped(
+        project.loose.map(\.process), owner: .project(project.project),
+        scope: "project:\(project.project.root)", loadOf: loadOf, usage: usage)
     }
-    let byName = Dictionary(grouping: inventory.unattributed, by: \.applicationOrName)
-    for (name, processes) in byName {
-      candidates.append(
-        culprit(id: "name:\(name)", title: name, owner: .none, processes: processes, usage: usage))
-    }
+    candidates += grouped(
+      inventory.unattributed, owner: .none, scope: "machine", loadOf: loadOf, usage: usage)
     return
       candidates
       .filter { $0.cpuPercent >= threshold }
       .sorted { ($1.cpuPercent, $0.title) < ($0.cpuPercent, $1.title) }
+  }
+
+  /// Processes outside any Session, grouped by the induced load they are part of, or else by
+  /// the application or name they share.
+  private func grouped(
+    _ processes: [ProcessRecord], owner: Culprit.Owner, scope: String,
+    loadOf: [ProcessRecord.Key: InducedLoad], usage: Usage
+  ) -> [Culprit] {
+    struct Group: Hashable {
+      let id: String
+      let title: String
+    }
+    return Dictionary(grouping: processes) { process -> Group in
+      if let load = loadOf[process.key] {
+        return Group(id: "\(scope):\(load.id)", title: load.title)
+      }
+      let name = process.applicationOrName
+      return Group(id: "\(scope):name:\(name)", title: name)
+    }
+    .map { group, members in
+      culprit(id: group.id, title: group.title, owner: owner, processes: members, usage: usage)
+    }
   }
 
   private func culprit(

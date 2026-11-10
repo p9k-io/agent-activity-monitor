@@ -12,6 +12,8 @@ extension Observer {
       CodexAdapter(home: home, projects: projects),
     ]
     let markers = adapters.reduce(into: Set<String>()) { $0.formUnion($1.markerNames) }
-    return Observer(source: SystemProcessSource(markerNames: markers), adapters: adapters)
+    return Observer(
+      source: SystemProcessSource(markerNames: markers), adapters: adapters,
+      linkers: [SimulatorLinker(), WebContentLinker()], projects: projects)
   }
 }

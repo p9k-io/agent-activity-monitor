@@ -124,3 +124,51 @@ extension MineReport {
       .joined(separator: "\n")
   }
 }
+
+extension StaleReport {
+  func text(now: Date) -> String {
+    var lines = [
+      columns(
+        ["KIND", "WHAT", "PROJECT", "WHY", "PROCS", "MEMORY"],
+        findings.map { row in
+          [
+            row.kindLabel, row.title, row.project, row.reason.text(now: now),
+            String(row.pids.count), memory(row.residentBytes),
+          ]
+        })
+    ]
+    lines.append("")
+    lines.append("A Cleanup of all of it would free \(memory(reclaimableBytes)).")
+    if !activityObserved {
+      lines.append("Idle dev servers are judged only while the app is running.")
+    }
+    return lines.joined(separator: "\n")
+  }
+}
+
+extension FindingRow {
+  var kindLabel: String {
+    switch kind {
+    case "idleSession": "idle session"
+    case "ownerlessLeftover": "ownerless leftover"
+    case "forgottenInducedLoad": "forgotten induced load"
+    case "idleDevServer": "idle dev server"
+    default: kind
+    }
+  }
+}
+
+extension FindingRow.Reason {
+  func text(now: Date) -> String {
+    switch kind {
+    case "sessionIdle": "no activity for \(age(of: since, now: now))"
+    case "orphan":
+      since == nil ? "its Session is gone" : "its Session ended \(age(of: since, now: now)) ago"
+    case "zombie": "ended, waiting to be collected by \(pid.map(String.init) ?? "its parent")"
+    case "olderDuplicate": "older copy of \(pid.map(String.init) ?? "a newer one")"
+    case "projectQuiet": "nothing worked in the Project for \(age(of: since, now: now))"
+    case "serverIdle": "no CPU use for \(age(of: since, now: now))"
+    default: kind
+    }
+  }
+}

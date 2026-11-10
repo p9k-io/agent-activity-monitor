@@ -12,7 +12,7 @@ struct Mine: ParsableCommand {
   @OptionGroup var output: OutputOptions
 
   func run() throws {
-    let observation = Observer.system().observe()
+    let observation = Monitor.system().look().observation
     guard let group = observation.inventory.session(owning: getpid()) else {
       FileHandle.standardError.write(Data("aam: this command is not running in a Session.\n".utf8))
       throw ExitCode(1)

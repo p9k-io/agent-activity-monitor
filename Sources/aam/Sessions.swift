@@ -9,7 +9,7 @@ struct Sessions: ParsableCommand {
   @OptionGroup var output: OutputOptions
 
   func run() throws {
-    let observation = Observer.system().observe()
+    let observation = Monitor.system().look().observation
     let report = SessionsReport(observation)
     if output.json {
       try printJSON(report)

@@ -1,0 +1,240 @@
+import AAMCore
+import Foundation
+import SQLite3
+
+public struct StoreError: Error, CustomStringConvertible {
+  public let description: String
+}
+
+/// Keeps what the app remembers in one SQLite file, shared by the app and the command line tool.
+///
+/// The file holds identifiers, paths and times. It never holds command lines, environment
+/// values or anything a Session said.
+public final class Store: @unchecked Sendable {
+  /// Guards the connection: one statement sequence at a time, whoever calls.
+  private let lock = NSLock()
+  private let connection: OpaquePointer
+
+  /// Where the store lives: the path in `AAM_STORE` when it is set, otherwise the app's folder
+  /// in Application Support.
+  public static var defaultURL: URL {
+    if let path = ProcessInfo.processInfo.environment["AAM_STORE"], !path.isEmpty {
+      return URL(fileURLWithPath: path)
+    }
+    return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+      .appendingPathComponent("io.p9k.agent-activity-monitor", isDirectory: true)
+      .appendingPathComponent("aam.sqlite")
+  }
+
+  public init(url: URL) throws {
+    try FileManager.default.createDirectory(
+      at: url.deletingLastPathComponent(), withIntermediateDirectories: true,
+      attributes: [.posixPermissions: 0o700])
+    var opened: OpaquePointer?
+    let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
+    guard sqlite3_open_v2(url.path, &opened, flags, nil) == SQLITE_OK, let opened else {
+      let message = opened.map { String(cString: sqlite3_errmsg($0)) } ?? "cannot open"
+      sqlite3_close_v2(opened)
+      throw StoreError(description: "\(url.path): \(message)")
+    }
+    connection = opened
+    sqlite3_busy_timeout(connection, 2000)
+    do {
+      try execute("PRAGMA journal_mode = WAL")
+      try migrate()
+    } catch {
+      sqlite3_close_v2(connection)
+      throw error
+    }
+    try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+  }
+
+  deinit {
+    sqlite3_close_v2(connection)
+  }
+
+  // MARK: Memory
+
+  public func loadMemory() throws -> Memory {
+    try locked {
+      var memory = Memory.empty
+      try rows(
+        "SELECT harness, id, project_root, title, markers, last_seen_at, ended_at FROM sessions"
+      ) { row in
+        let id = SessionID(harness: HarnessID(rawValue: row.text(0)), value: row.text(1))
+        memory.sessions[id] = Memory.PastSession(
+          project: Project(root: row.text(2)),
+          title: row.optionalText(3),
+          markers: (try? JSONDecoder().decode([String: String].self, from: Data(row.text(4).utf8)))
+            ?? [:],
+          lastSeenAt: row.date(5),
+          endedAt: row.optionalDate(6))
+      }
+      try rows("SELECT pid, started_at, harness, session_id, project_root FROM lineage") { row in
+        memory.lineage[row.key(0, 1)] = Memory.Lineage(
+          session: SessionID(harness: HarnessID(rawValue: row.text(2)), value: row.text(3)),
+          project: Project(root: row.text(4)))
+      }
+      try rows("SELECT pid, started_at, last_busy_at FROM activity") { row in
+        memory.lastBusyAt[row.key(0, 1)] = row.date(2)
+      }
+      try rows("SELECT value FROM meta WHERE key = 'activity_as_of'") { row in
+        memory.activityAsOf = Double(row.text(0)).map(Date.init(timeIntervalSinceReferenceDate:))
+      }
+      return memory
+    }
+  }
+
+  /// Replaces what was remembered with `memory`, in one transaction.
+  public func save(_ memory: Memory) throws {
+    try locked {
+      try execute("BEGIN IMMEDIATE")
+      do {
+        try execute("DELETE FROM sessions; DELETE FROM lineage; DELETE FROM activity")
+        for (id, session) in memory.sessions {
+          let markers = String(
+            decoding: (try? JSONEncoder().encode(session.markers)) ?? Data("{}".utf8),
+            as: UTF8.self)
+          try run(
+            "INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?)",
+            .text(id.harness.rawValue), .text(id.value), .text(session.project.root),
+            session.title.map(Value.text) ?? .null, .text(markers), .date(session.lastSeenAt),
+            session.endedAt.map(Value.date) ?? .null)
+        }
+        for (key, lineage) in memory.lineage {
+          try run(
+            "INSERT INTO lineage VALUES (?, ?, ?, ?, ?)",
+            .integer(Int64(key.pid)), .date(key.startedAt),
+            .text(lineage.session.harness.rawValue), .text(lineage.session.value),
+            .text(lineage.project.root))
+        }
+        for (key, date) in memory.lastBusyAt {
+          try run(
+            "INSERT INTO activity VALUES (?, ?, ?)",
+            .integer(Int64(key.pid)), .date(key.startedAt), .date(date))
+        }
+        try run("DELETE FROM meta WHERE key = 'activity_as_of'")
+        if let measured = memory.activityAsOf {
+          try run(
+            "INSERT INTO meta VALUES ('activity_as_of', ?)",
+            .text(String(measured.timeIntervalSinceReferenceDate)))
+        }
+        try execute("COMMIT")
+      } catch {
+        try? execute("ROLLBACK")
+        throw error
+      }
+    }
+  }
+
+  // MARK: Schema
+
+  private func migrate() throws {
+    try execute(
+      """
+      CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS sessions (
+        harness TEXT NOT NULL, id TEXT NOT NULL, project_root TEXT NOT NULL, title TEXT,
+        markers TEXT NOT NULL, last_seen_at REAL NOT NULL, ended_at REAL,
+        PRIMARY KEY (harness, id));
+      CREATE TABLE IF NOT EXISTS lineage (
+        pid INTEGER NOT NULL, started_at REAL NOT NULL, harness TEXT NOT NULL,
+        session_id TEXT NOT NULL, project_root TEXT NOT NULL,
+        PRIMARY KEY (pid, started_at));
+      CREATE TABLE IF NOT EXISTS activity (
+        pid INTEGER NOT NULL, started_at REAL NOT NULL, last_busy_at REAL NOT NULL,
+        PRIMARY KEY (pid, started_at));
+      """)
+  }
+
+  // MARK: SQLite
+
+  private enum Value {
+    case text(String)
+    case real(Double)
+    case integer(Int64)
+    case null
+
+    /// A date is stored the way `Date` holds it, so that it reads back as exactly the same
+    /// value. Converting to another epoch and back can change the last bit, and a process is
+    /// looked up by its start time.
+    static func date(_ date: Date) -> Value {
+      .real(date.timeIntervalSinceReferenceDate)
+    }
+  }
+
+  /// A row being read. Columns are addressed by position.
+  private struct Row {
+    let statement: OpaquePointer
+
+    func text(_ column: Int32) -> String {
+      sqlite3_column_text(statement, column).map { String(cString: $0) } ?? ""
+    }
+
+    func optionalText(_ column: Int32) -> String? {
+      sqlite3_column_type(statement, column) == SQLITE_NULL ? nil : text(column)
+    }
+
+    func date(_ column: Int32) -> Date {
+      Date(timeIntervalSinceReferenceDate: sqlite3_column_double(statement, column))
+    }
+
+    func optionalDate(_ column: Int32) -> Date? {
+      sqlite3_column_type(statement, column) == SQLITE_NULL ? nil : date(column)
+    }
+
+    func key(_ pid: Int32, _ startedAt: Int32) -> ProcessRecord.Key {
+      ProcessRecord.Key(pid: sqlite3_column_int(statement, pid), startedAt: date(startedAt))
+    }
+  }
+
+  private func locked<T>(_ body: () throws -> T) rethrows -> T {
+    lock.lock()
+    defer { lock.unlock() }
+    return try body()
+  }
+
+  private func execute(_ sql: String) throws {
+    guard sqlite3_exec(connection, sql, nil, nil, nil) == SQLITE_OK else { throw failure() }
+  }
+
+  private func run(_ sql: String, _ values: Value...) throws {
+    let statement = try prepare(sql, values)
+    defer { sqlite3_finalize(statement) }
+    guard sqlite3_step(statement) == SQLITE_DONE else { throw failure() }
+  }
+
+  private func rows(_ sql: String, _ read: (Row) -> Void) throws {
+    let statement = try prepare(sql, [])
+    defer { sqlite3_finalize(statement) }
+    while true {
+      switch sqlite3_step(statement) {
+      case SQLITE_ROW: read(Row(statement: statement))
+      case SQLITE_DONE: return
+      default: throw failure()
+      }
+    }
+  }
+
+  private func prepare(_ sql: String, _ values: [Value]) throws -> OpaquePointer {
+    var statement: OpaquePointer?
+    guard sqlite3_prepare_v2(connection, sql, -1, &statement, nil) == SQLITE_OK, let statement
+    else { throw failure() }
+    // SQLite copies the text before the call returns.
+    let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+    for (index, value) in values.enumerated() {
+      let position = Int32(index + 1)
+      switch value {
+      case .text(let text): sqlite3_bind_text(statement, position, text, -1, transient)
+      case .real(let number): sqlite3_bind_double(statement, position, number)
+      case .integer(let number): sqlite3_bind_int64(statement, position, number)
+      case .null: sqlite3_bind_null(statement, position)
+      }
+    }
+    return statement
+  }
+
+  private func failure() -> StoreError {
+    StoreError(description: String(cString: sqlite3_errmsg(connection)))
+  }
+}
