@@ -12,6 +12,20 @@ struct CleanupRequestTests {
     #expect(request(reason: String(repeating: "a", count: 800)).reason.count == 500)
   }
 
+  @Test func `characters that break a line or reorder text are taken out of a reason`() {
+    // A line separator, a right-to-left override and an isolate.
+    let reason = request(reason: "first\u{2028}second\u{2029}th\u{202E}i\u{2066}rd").reason
+
+    #expect(reason == "first second third")
+  }
+
+  @Test func `the limit of a reason counts what is stored, not what is seen`() {
+    // One visible character made of a letter and two thousand accents.
+    let stacked = "e" + String(repeating: "\u{301}", count: 2000)
+
+    #expect(request(reason: stacked).reason.unicodeScalars.count == 500)
+  }
+
   @Test func `a reason is kept to one line without control characters`() {
     let reason = request(reason: "first\nsecond\tthird\u{1B}[31m red\u{07}").reason
 

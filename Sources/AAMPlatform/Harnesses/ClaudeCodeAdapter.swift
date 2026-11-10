@@ -95,7 +95,15 @@ public final class ClaudeCodeAdapter: HarnessAdapter {
       directory: fields["cwd"] as? String,
       name: name?.isEmpty == false ? name : nil,
       status: fields["status"] as? String,
-      statusChangedAt: changed.map { Date(timeIntervalSince1970: $0 / 1000) })
+      statusChangedAt: changed.flatMap { Self.date(milliseconds: $0) })
+  }
+
+  /// A time in milliseconds, when it can be a real one. The record is a file anything can
+  /// write, so a number is not taken for a time unless it falls in this century.
+  private static func date(milliseconds: Double) -> Date? {
+    let seconds = milliseconds / 1000
+    guard seconds.isFinite, seconds > 946_684_800, seconds < 4_102_444_800 else { return nil }
+    return Date(timeIntervalSince1970: seconds)
   }
 
   private func state(_ status: String?) -> SessionState {

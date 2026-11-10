@@ -15,13 +15,13 @@ public struct CleanupRequest: Sendable, Equatable, Identifiable, Codable {
   /// What the Cleanup did, in numbers of processes.
   public struct Outcome: Sendable, Equatable, Codable {
     public var ended: Int
-    public var killed: Int
+    public var endedByForce: Int
     public var survived: Int
     public var refused: Int
 
-    public init(ended: Int, killed: Int, survived: Int, refused: Int) {
+    public init(ended: Int, endedByForce: Int, survived: Int, refused: Int) {
       self.ended = ended
-      self.killed = killed
+      self.endedByForce = endedByForce
       self.survived = survived
       self.refused = refused
     }
@@ -54,7 +54,7 @@ public struct CleanupRequest: Sendable, Equatable, Identifiable, Codable {
     self.id = id
     self.createdAt = createdAt
     self.requester = requester
-    self.reason = String(Self.singleLine(reason).prefix(Self.reasonLimit))
+    self.reason = Self.singleLine(reason)
     self.targets = targets
     self.status = status
     self.decidedAt = decidedAt
@@ -62,15 +62,23 @@ public struct CleanupRequest: Sendable, Equatable, Identifiable, Codable {
   }
 
   /// The reason is written by whoever files the request and is shown in a terminal and in the
-  /// app, so it is kept to one line: line breaks and tabs become spaces, other control
-  /// characters are dropped.
+  /// app next to what a person is asked to confirm. So it is kept to one line of plain text:
+  /// whatever breaks a line becomes a space, and control and formatting characters, which
+  /// can hide or reorder what is shown, are dropped. The limit counts what is stored, because
+  /// one visible character can be made of any number of them.
   private static func singleLine(_ text: String) -> String {
     var line = String.UnicodeScalarView()
     for scalar in text.unicodeScalars {
-      if scalar.properties.generalCategory != .control {
-        line.append(scalar)
-      } else if scalar == "\n" || scalar == "\r" || scalar == "\t" {
+      guard line.count < reasonLimit else { break }
+      switch scalar.properties.generalCategory {
+      case .lineSeparator, .paragraphSeparator:
         line.append(" ")
+      case .control:
+        if scalar == "\n" || scalar == "\r" || scalar == "\t" { line.append(" ") }
+      case .format:
+        continue
+      default:
+        line.append(scalar)
       }
     }
     return String(line)

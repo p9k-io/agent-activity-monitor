@@ -43,7 +43,9 @@ extension AppModel {
     let report: CleanupReport
     switch proposal.means {
     case .endProcesses:
-      report = .processes(await Self.end(proposal.asked, with: terminator))
+      // Exactly what the dialog listed, not what the same request would cover by now.
+      report = .processes(
+        await Self.end(proposal.targets.map(\.process.key), with: terminator))
     case .shutDownSimulator(let device):
       report = .simulator(shutDown: await Self.shutDown(device))
     }

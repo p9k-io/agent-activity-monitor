@@ -153,7 +153,9 @@ private struct Pass {
           finding(
             .forgottenInducedLoad, .projectQuiet(since: quietSince),
             title: root.process.name, project: project.project, session: nil,
-            subtree(of: root.process, within: members)))
+            subtree(of: root.process, within: members),
+            // Ending a virtual machine ends every container in it. It is only shown.
+            canCleanUp: root.kind != .virtualMachine))
       }
     }
     return findings

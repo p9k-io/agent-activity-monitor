@@ -42,6 +42,21 @@ struct ClaudeCodeAdapterTests {
       session.markers == ["CLAUDE_CODE_SESSION_ID": "11111111-aaaa-4bbb-8ccc-000000000001"])
   }
 
+  @Test(arguments: ["1e300", "-5", "9999999999999999"])
+  func `a time in the record that cannot be real is not taken for the last activity`(
+    time: String
+  ) throws {
+    try record(
+      pid: 4100,
+      "\"sessionId\": \"s\", \"cwd\": \"/work/alpha\", \"status\": \"idle\", "
+        + "\"statusUpdatedAt\": \(time)")
+
+    let session = try #require(adapter.sessions(in: .of(claude)).first)
+
+    #expect(session.lastActivityAt == nil)
+    #expect(session.state == .idle)
+  }
+
   @Test(arguments: [
     ("busy", SessionState.working),
     ("waiting", .waiting),

@@ -108,14 +108,12 @@ struct SystemProcessSourceTests {
       waitpid(pid, &status, 0)
     }
 
-    var record: ProcessRecord?
-    let deadline = ContinuousClock.now + .seconds(3)
-    repeat {
-      record = source.record(for: pid)
-      usleep(20_000)
-    } while record?.isZombie != true && ContinuousClock.now < deadline
+    // Wait until the child has ended, without collecting it: a deadline here would be a guess
+    // at how long a busy machine takes to start and end a process.
+    var info = siginfo_t()
+    #expect(waitid(P_PID, id_t(pid), &info, WEXITED | WNOWAIT) == 0)
 
-    #expect(record?.isZombie == true)
+    #expect(source.record(for: pid)?.isZombie == true)
     #expect(source.snapshot().processes.first { $0.pid == pid }?.isZombie == true)
   }
 

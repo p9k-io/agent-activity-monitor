@@ -60,20 +60,43 @@ public struct CleanupRequestFiler: Sendable {
       reading.snapshot.processes.first { $0.pid == pid }?.key
         ?? ProcessRecord.Key(pid: pid, startedAt: .distantPast)
     }
+    // A request is for what a Session left around. What belongs to no Project or Session is
+    // a person's own: a browser, a virtual machine, the login window.
+    let attributed = Set(
+      reading.inventory.projects.flatMap { project in
+        project.loose.map(\.process.key)
+          + project.sessions.flatMap { $0.processes.map(\.process.key) }
+      })
+    let present = Set(reading.snapshot.processes.map(\.key))
+    let outside = keys.filter { present.contains($0) && !attributed.contains($0) }
+    var refused = outside.map { CleanupPlan.Refusal(process: $0, reason: .unattributed) }
+
     // What a target started is added when the Cleanup is proposed, from what runs then.
     let plan = CleanupPlanner(ownUser: ownUser, protected: [])
-      .plan(for: keys, in: reading.snapshot, includingDescendants: false)
+      .plan(
+        for: keys.filter { !outside.contains($0) }, in: reading.snapshot,
+        includingDescendants: false)
+    refused += plan.refused
     guard !plan.targets.isEmpty else {
-      throw Refusal.nothingToAsk(plan.refused.map(\.reason))
+      throw Refusal.nothingToAsk(refused.map(\.reason))
     }
 
     let request = CleanupRequest(
       id: String(UUID().uuidString.lowercased().prefix(8)),
       createdAt: now,
-      requester: reading.inventory.session(owning: caller)?.session.id,
+      requester: requester(for: caller, in: reading),
       reason: reason,
       targets: plan.targets.map(\.key))
     try store.add(request)
-    return (request, plan.refused)
+    return (request, refused)
+  }
+
+  /// The Session whose tree the caller is in. A marker in the caller's environment is not
+  /// enough: anything can set one and ask in a Session's name.
+  private func requester(for caller: Int32, in reading: Reading) -> SessionID? {
+    guard let group = reading.inventory.session(owning: caller),
+      group.processes.contains(where: { $0.process.pid == caller && $0.evidence == .tree })
+    else { return nil }
+    return group.session.id
   }
 }

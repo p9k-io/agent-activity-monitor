@@ -8,7 +8,7 @@ public struct CleanupResult: Sendable, Equatable {
   /// Exited after being asked to.
   public var ended: [ProcessRecord.Key] = []
   /// Did not exit in time and were ended by force.
-  public var killed: [ProcessRecord.Key] = []
+  public var endedByForce: [ProcessRecord.Key] = []
   /// Still running after everything.
   public var survived: [ProcessRecord.Key] = []
   /// Left alone, with the reason.
@@ -19,7 +19,8 @@ public struct CleanupResult: Sendable, Equatable {
   /// The same in numbers, as it is recorded with a Cleanup request.
   public var outcome: CleanupRequest.Outcome {
     CleanupRequest.Outcome(
-      ended: ended.count, killed: killed.count, survived: survived.count, refused: refused.count)
+      ended: ended.count, endedByForce: endedByForce.count, survived: survived.count,
+      refused: refused.count)
   }
 }
 
@@ -51,13 +52,12 @@ public struct Terminator: Sendable {
     planner = CleanupPlanner(ownUser: getuid(), protected: protected ?? Self.selfAndAncestors())
   }
 
-  /// - Parameter includingDescendants: Whether what a target started is ended with it.
-  public func end(
-    _ keys: [ProcessRecord.Key], includingDescendants: Bool = true
-  ) async -> CleanupResult {
+  /// Ends exactly the processes given, and nothing they started since: a person confirmed a
+  /// list, and that list is all that may be ended. What has gone, changed hands or may not be
+  /// ended any more is left out.
+  public func end(_ keys: [ProcessRecord.Key]) async -> CleanupResult {
     let plan = planner.plan(
-      for: keys, in: source.snapshot(refreshingOtherUsers: false),
-      includingDescendants: includingDescendants)
+      for: keys, in: source.snapshot(refreshingOtherUsers: false), includingDescendants: false)
     var result = CleanupResult()
     result.refused = plan.refused
 
@@ -68,7 +68,7 @@ public struct Terminator: Sendable {
 
     send(SIGKILL, to: stubborn)
     result.survived = await waitForExit(of: stubborn, upTo: Self.patience)
-    result.killed = stubborn.filter { !result.survived.contains($0) }
+    result.endedByForce = stubborn.filter { !result.survived.contains($0) }
     return result
   }
 

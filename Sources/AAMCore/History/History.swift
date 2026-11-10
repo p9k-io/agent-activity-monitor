@@ -46,6 +46,9 @@ public struct HistoryRecorder: Sendable {
     self.busyAbove = busyAbove
   }
 
+  /// How many buckets wait to be taken out.
+  public var count: Int { buckets.count }
+
   /// - Parameters:
   ///   - usage: CPU use since the look before.
   ///   - elapsed: The seconds since the look before.

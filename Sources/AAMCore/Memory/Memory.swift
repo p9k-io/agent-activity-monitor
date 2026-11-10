@@ -62,6 +62,20 @@ public struct Memory: Sendable, Equatable {
     var live: Set<SessionID> = []
     var followed: [ProcessRecord.Key] = []
 
+    // A Session whose root process reports another identifier than before, as after starting
+    // over, is the same Session. What was remembered for it goes on under the new identifier
+    // instead of being left behind by a Session that seems to have ended.
+    let reported = Set(observation.sessions.map(\.id))
+    for session in observation.sessions {
+      guard let before = lineage[session.root]?.session, before != session.id,
+        !reported.contains(before)
+      else { continue }
+      for (key, entry) in lineage where entry.session == before {
+        lineage[key] = Lineage(session: session.id, project: entry.project)
+      }
+      sessions[before] = nil
+    }
+
     for project in observation.inventory.projects {
       for group in project.sessions {
         let session = group.session

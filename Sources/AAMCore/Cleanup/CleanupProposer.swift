@@ -115,6 +115,12 @@ public struct CleanupProposer: Sendable {
           "Processes of the Session \(name) are among these, and it is not the one asking.")
       }
     }
+    let nowhere = plan.targets.count { places[$0.pid] == nil }
+    if nowhere > 0 {
+      cautions.append(
+        "\(nowhere) of these processes \(nowhere == 1 ? "belongs" : "belong") "
+          + "to no Project or Session.")
+    }
     return make(
       id: "request:\(request.id)",
       title: "Approve Cleanup request \(request.id)?",

@@ -127,7 +127,10 @@ public actor Sampler {
     }
     if saving {
       try? store?.save(memory)
-      try? store?.record(history.drain())
+      // Taken out first: without a store it would otherwise pile up for as long as the app
+      // runs.
+      let buckets = history.drain()
+      try? store?.record(buckets)
       // Once in a long while is enough for dropping what is too old.
       if ticks % (saveEvery * Self.pruneEverySaves) == 1 {
         try? store?.prune(before: now.addingTimeInterval(-Self.retention))
@@ -151,8 +154,12 @@ public actor Sampler {
   /// Writes what is remembered to the store now, as before the app quits.
   public func flush() {
     try? store?.save(memory)
-    try? store?.record(history.drain())
+    let buckets = history.drain()
+    try? store?.record(buckets)
   }
+
+  /// How many minutes of history wait to be written.
+  public var historyBacklog: Int { history.count }
 
   /// CPU use of every process. The current user's processes are measured since the look
   /// before; everyone else's since the last time they were asked about, because between
