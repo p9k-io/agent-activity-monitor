@@ -15,6 +15,8 @@ public struct Culprit: Sendable, Equatable, Identifiable {
   public let cpuPercent: Double
   public let residentBytes: UInt64
   public let processes: [ProcessRecord.Key]
+  /// The kind of induced load the Culprit is, when it is induced load.
+  public let load: InducedLoad.Kind?
 
   public init(
     id: String,
@@ -22,7 +24,8 @@ public struct Culprit: Sendable, Equatable, Identifiable {
     owner: Owner,
     cpuPercent: Double,
     residentBytes: UInt64,
-    processes: [ProcessRecord.Key]
+    processes: [ProcessRecord.Key],
+    load: InducedLoad.Kind? = nil
   ) {
     self.id = id
     self.title = title
@@ -30,6 +33,7 @@ public struct Culprit: Sendable, Equatable, Identifiable {
     self.cpuPercent = cpuPercent
     self.residentBytes = residentBytes
     self.processes = processes
+    self.load = load
   }
 }
 
@@ -117,16 +121,19 @@ public struct CulpritRanker: Sendable {
     struct Group: Hashable {
       let id: String
       let title: String
+      let load: InducedLoad.Kind?
     }
     return Dictionary(grouping: processes) { process -> Group in
       if let load = loadOf[process.key] {
-        return Group(id: "\(scope):\(load.id)", title: load.title)
+        return Group(id: "\(scope):\(load.id)", title: load.title, load: load.kind)
       }
       let name = process.applicationOrName
-      return Group(id: "\(scope):name:\(name)", title: name)
+      return Group(id: "\(scope):name:\(name)", title: name, load: nil)
     }
     .map { group, members in
-      culprit(id: group.id, title: group.title, owner: owner, processes: members, usage: usage)
+      culprit(
+        id: group.id, title: group.title, owner: owner, processes: members, usage: usage,
+        load: group.load)
     }
   }
 
@@ -135,7 +142,8 @@ public struct CulpritRanker: Sendable {
     title: String,
     owner: Culprit.Owner,
     processes: [ProcessRecord],
-    usage: Usage
+    usage: Usage,
+    load: InducedLoad.Kind? = nil
   ) -> Culprit {
     Culprit(
       id: id,
@@ -143,7 +151,8 @@ public struct CulpritRanker: Sendable {
       owner: owner,
       cpuPercent: processes.reduce(0) { $0 + usage.cpuPercent(of: $1.key) },
       residentBytes: processes.reduce(0) { $0 + $1.residentBytes },
-      processes: processes.map(\.key)
+      processes: processes.map(\.key),
+      load: load
     )
   }
 }

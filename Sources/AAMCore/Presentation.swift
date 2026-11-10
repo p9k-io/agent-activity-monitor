@@ -58,6 +58,22 @@ extension StaleFinding.Reason {
   }
 }
 
+extension HarnessID {
+  /// The Harness by the name people know it by.
+  public var label: String {
+    switch self {
+    case .claudeCode: "Claude Code"
+    case .codex: "Codex"
+    default: rawValue
+    }
+  }
+}
+
+extension Session {
+  /// The Session's title, or its Project's name when it has none.
+  public var displayTitle: String { title ?? project.name }
+}
+
 extension SessionState {
   public var label: String {
     switch self {

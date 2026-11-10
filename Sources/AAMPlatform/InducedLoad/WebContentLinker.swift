@@ -34,6 +34,7 @@ public final class WebContentLinker: InducedLoadLinker {
     return members.sorted { $0.key < $1.key }.map { owner, processes in
       InducedLoad(
         id: "web-content:\(owner)",
+        kind: .webContent(application: owner),
         title: "Web content of \(applicationName(owner) ?? owner)",
         processes: processes)
     }

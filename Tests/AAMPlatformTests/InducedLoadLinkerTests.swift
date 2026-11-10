@@ -30,6 +30,15 @@ struct SimulatorLinkerTests {
 
     #expect(load.processes.map(\.pid).sorted() == [900, 901, 902])
     #expect(load.id == "simulator:\(udid)")
+    #expect(load.kind == .simulator(device: udid))
+  }
+
+  @Test func `a simulator whose device cannot be told is still a simulator`() throws {
+    let load = try #require(
+      SimulatorLinker(devices: scratch.url)
+        .inducedLoad(in: .of(.make(900, path: "/usr/libexec/launchd_sim"))).first)
+
+    #expect(load.kind == .simulator(device: nil))
   }
 
   @Test func `the simulator is named after its device when the device record can be read`() throws {
@@ -77,6 +86,7 @@ struct WebContentLinkerTests {
     let terminal = loads.first { $0.id == "web-content:com.example.terminal" }
     #expect(loads.count == 2)
     #expect(terminal?.title == "Web content of com.example.terminal")
+    #expect(terminal?.kind == .webContent(application: "com.example.terminal"))
     #expect(terminal?.processes.map(\.pid).sorted() == [10, 11])
   }
 
@@ -179,6 +189,7 @@ struct VirtualMachineLinkerTests {
       .inducedLoad(in: .of(.make(30, path: machine)))
 
     #expect(loads.map(\.title) == ["Virtual machine"])
+    #expect(loads.map(\.kind) == [.virtualMachine])
     #expect(loads.first?.processes.map(\.pid) == [30])
   }
 

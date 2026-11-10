@@ -48,6 +48,7 @@ extension Session {
     title: String? = nil,
     state: SessionState = .idle,
     lastActivity: Date? = nil,
+    resume: String? = nil,
     markers: [String: String] = [:]
   ) -> Session {
     Session(
@@ -58,7 +59,7 @@ extension Session {
       title: title,
       state: state,
       lastActivityAt: lastActivity,
-      resumeCommand: nil,
+      resumeCommand: resume,
       markers: markers
     )
   }

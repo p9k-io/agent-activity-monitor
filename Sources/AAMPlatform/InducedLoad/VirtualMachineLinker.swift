@@ -31,6 +31,7 @@ public final class VirtualMachineLinker: InducedLoadLinker {
       let tool = tools[machine.key] ?? nil
       return InducedLoad(
         id: "virtual-machine:\(machine.pid)",
+        kind: .virtualMachine,
         title: tool.map { "Virtual machine of \($0)" } ?? "Virtual machine",
         processes: [machine.key])
     }
