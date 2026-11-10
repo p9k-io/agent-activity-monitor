@@ -21,6 +21,19 @@ Planned for the first release:
 - Keeps 30 days of history, so you can see what was busy an hour ago and where CPU time went.
 - Offers the same data to scripts and agents through the `aam` command line tool and an MCP server.
 
+## Command line
+
+`aam` reads the same data as the app and prints it as a table, or as JSON with `--json`.
+
+```sh
+aam sessions    # running Sessions with their Project, state and memory
+aam ps          # processes grouped by Project and Session, each with its Evidence
+aam culprits    # what is consuming CPU right now and whom it belongs to
+aam mine        # the Session this command runs in and what is attributed to it
+```
+
+`aam` never ends a process.
+
 ## Principles
 
 - **A person approves every cleanup.** The command line tool and the MCP server can ask for one. Only the app carries it out, after you confirm.
