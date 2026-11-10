@@ -16,10 +16,24 @@ public enum Evidence: String, Sendable, Codable, CaseIterable {
 public struct AttributedProcess: Sendable, Equatable, Identifiable {
   public let process: ProcessRecord
   public let evidence: Evidence
+  public let kind: ProcessKind
+  /// Whether the process outlived the Session it was attributed to.
+  public let isOrphan: Bool
+  /// The Session an Orphan outlived, when it is known which one it was.
+  public let formerSession: SessionID?
 
-  public init(process: ProcessRecord, evidence: Evidence) {
+  public init(
+    process: ProcessRecord,
+    evidence: Evidence,
+    kind: ProcessKind,
+    isOrphan: Bool = false,
+    formerSession: SessionID? = nil
+  ) {
     self.process = process
     self.evidence = evidence
+    self.kind = kind
+    self.isOrphan = isOrphan
+    self.formerSession = formerSession
   }
 
   public var id: ProcessRecord.Key { process.key }
