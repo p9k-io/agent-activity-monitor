@@ -35,9 +35,9 @@ targets:
         PRODUCT_NAME: Agent Activity Monitor
         PRODUCT_MODULE_NAME: AgentActivityMonitor
         PRODUCT_BUNDLE_IDENTIFIER: io.p9k.agent-activity-monitor
-        MARKETING_VERSION: "0.0.0" # x-release-please-version
+        MARKETING_VERSION: "0.1.0" # x-release-please-version
         # The build number is the version: Sparkle decides by it whether an update is newer.
-        CURRENT_PROJECT_VERSION: "0.0.0" # x-release-please-version
+        CURRENT_PROJECT_VERSION: "0.1.0" # x-release-please-version
         SWIFT_VERSION: "6.0"
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         SWIFT_APPROACHABLE_CONCURRENCY: YES
