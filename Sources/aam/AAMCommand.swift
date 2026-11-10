@@ -13,7 +13,7 @@ struct AAMCommand: ParsableCommand {
     version: AAM.version,
     subcommands: [
       Sessions.self, Processes.self, Culprits.self, Stale.self, Mine.self, RequestCleanup.self,
-      Requests.self, MCP.self,
+      Requests.self, Report.self, MCP.self,
     ]
   )
 }

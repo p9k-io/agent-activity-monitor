@@ -115,6 +115,29 @@ struct SamplerTests {
     #expect(totals.map(\.session) == [SessionID(harness: .claudeCode, value: "s-100")])
   }
 
+  @Test func `history adds up to what the looks measured over fifteen minutes`() async throws {
+    let url = scratch.url.appendingPathComponent("aam.sqlite")
+    // Ninety looks ten seconds apart. The Session's root uses a different amount each time.
+    var spent: Int64 = 0
+    var snapshots: [Snapshot] = []
+    for look in 0...90 {
+      spent += Int64(1 + look % 7)
+      snapshots.append(
+        snapshot(after: Double(look) * 10, process(100, path: "/opt/bin/claude", cpu: spent)))
+    }
+    let measured = Double(spent - 1)
+    let (sampler, _) = sampler(snapshots, store: try Store(url: url))
+
+    for _ in snapshots {
+      _ = await sampler.tick()
+    }
+    await sampler.flush()
+
+    let report = try Store(url: url).usageReport(since: epoch)
+    #expect(abs(report.cpuSeconds - measured) < 0.001)
+    #expect(report.rows.count == 1)
+  }
+
   @Test func `changing the thresholds changes what is Stale`() async {
     let claude = process(100, path: "/opt/bin/claude", cpu: 0)
     let adapter = ClaudeLike(state: .idle, lastActivityAt: epoch.addingTimeInterval(-7200))

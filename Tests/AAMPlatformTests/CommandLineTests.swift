@@ -142,6 +142,44 @@ struct CommandLineTests {
     #expect(table.contains("3 exited."))
   }
 
+  // MARK: Reports
+
+  @Test func `where CPU time went is reported from what the store holds`() throws {
+    let session = SessionID(harness: .claudeCode, value: "s1")
+    let alpha = Project(root: "/work/alpha")
+    let connection = try Store(url: store)
+    var memory = Memory.empty
+    memory.sessions[session] = Memory.PastSession(
+      project: alpha, title: "Fix login", markers: [:], lastSeenAt: Date(), endedAt: nil)
+    try connection.save(memory)
+    try connection.record([
+      HistoryBucket(
+        minute: Date().addingTimeInterval(-3600), project: alpha, session: session,
+        kind: .testRunner, cpuSeconds: 150, peakResidentBytes: 2_097_152),
+      HistoryBucket(
+        minute: Date().addingTimeInterval(-3 * 86_400), project: alpha, session: session,
+        kind: .testRunner, cpuSeconds: 9000, peakResidentBytes: 0),
+    ])
+
+    let report = try json("report", "--days", "1", "--json")
+    let table = String(decoding: try run("report", "--days", "1").output, as: UTF8.self)
+
+    #expect(report["cpuSeconds"] as? Double == 150)
+    #expect(report["days"] as? Int == 1)
+    let rows = try #require(report["sessions"] as? [[String: Any]])
+    #expect(rows.map { $0["title"] as? String } == ["Fix login"])
+    #expect(rows.first?["project"] as? String == "alpha")
+    #expect(rows.first?["peakResidentBytes"] as? Int == 2_097_152)
+    #expect(table.contains("CPU TIME"))
+    #expect(table.contains("Fix login"))
+    #expect(table.contains("2m"))
+  }
+
+  @Test(arguments: ["0", "31", "many"])
+  func `a report is refused for a period it cannot cover`(days: String) throws {
+    #expect(try run("report", "--days", days).status != 0)
+  }
+
   // MARK: Model Context Protocol
 
   /// Starts `aam mcp`, sends the messages one per line and returns the replies.

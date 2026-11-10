@@ -206,4 +206,22 @@ struct StoreTests {
     #expect(try store.usageTotals(since: .distantPast).map(\.cpuSeconds) == [2])
     #expect(try store.requests().map(\.id) == ["old-waiting", "recent-decided"])
   }
+
+  @Test func `a report names each Session by the title that is remembered for it`() throws {
+    let store = try Store(url: url)
+    var memory = Memory.empty
+    memory.sessions[first] = Memory.PastSession(
+      project: alpha, title: "Fix login", markers: [:], lastSeenAt: epoch, endedAt: nil)
+    try store.save(memory)
+    try store.record([
+      bucket(at: 0, cpu: 30, peak: 700), bucket(at: 0, cpu: 12, session: nil),
+      bucket(at: -3600, cpu: 500),
+    ])
+
+    let report = try store.usageReport(since: epoch.addingTimeInterval(-60))
+
+    #expect(report.rows.map(\.title) == ["Fix login", "Not tied to one Session"])
+    #expect(report.rows.map(\.cpuSeconds) == [30, 12])
+    #expect(report.rows.first?.peakResidentBytes == 700)
+  }
 }
