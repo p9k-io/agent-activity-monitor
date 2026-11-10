@@ -80,14 +80,3 @@ struct Requests: ParsableCommand {
     }
   }
 }
-
-extension CleanupPlan.Reason {
-  var explanation: String {
-    switch self {
-    case .gone: "there is no such process any more"
-    case .notYours: "it belongs to another user"
-    case .protected: "it must never be ended"
-    case .zombie: "it has ended already and waits to be collected by its parent"
-    }
-  }
-}

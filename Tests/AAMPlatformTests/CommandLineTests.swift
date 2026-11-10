@@ -136,5 +136,8 @@ struct CommandLineTests {
 
     #expect(rows.first?["status"] as? String == "done")
     #expect((rows.first?["outcome"] as? [String: Any])?["ended"] as? Int == 3)
+    let table = String(decoding: try run("requests").output, as: UTF8.self)
+    #expect(table.contains("OUTCOME"))
+    #expect(table.contains("3 exited."))
   }
 }

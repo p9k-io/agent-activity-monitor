@@ -143,11 +143,12 @@ extension StaleReport {
 extension RequestsReport {
   func table(now: Date) -> String {
     columns(
-      ["ID", "STATUS", "FILED", "BY", "PROCS", "REASON"],
+      ["ID", "STATUS", "FILED", "BY", "PROCS", "OUTCOME", "REASON"],
       requests.map { row in
         [
           row.id, row.status, "\(age(of: row.createdAt, now: now)) ago",
-          row.requester ?? "-", String(row.pids.count), row.reason.isEmpty ? "-" : row.reason,
+          row.requester ?? "-", String(row.pids.count), row.outcome?.text ?? "-",
+          row.reason.isEmpty ? "-" : row.reason,
         ]
       })
   }

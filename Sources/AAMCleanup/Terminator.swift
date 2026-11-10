@@ -15,6 +15,12 @@ public struct CleanupResult: Sendable, Equatable {
   public var refused: [CleanupPlan.Refusal] = []
 
   public init() {}
+
+  /// The same in numbers, as it is recorded with a Cleanup request.
+  public var outcome: CleanupRequest.Outcome {
+    CleanupRequest.Outcome(
+      ended: ended.count, killed: killed.count, survived: survived.count, refused: refused.count)
+  }
 }
 
 /// Ends processes: asks them to exit, waits, and ends by force what is still there.
@@ -26,8 +32,9 @@ public struct Terminator: Sendable {
   private static let patience: Duration = .seconds(2)
   private static let pollInterval: Duration = .milliseconds(100)
 
+  /// The rules this Terminator ends by. A proposal made with them shows what it would do.
+  public let planner: CleanupPlanner
   private let source: SystemProcessSource
-  private let planner: CleanupPlanner
   private let grace: Duration
 
   /// - Parameters:

@@ -54,10 +54,25 @@ public struct CleanupRequest: Sendable, Equatable, Identifiable, Codable {
     self.id = id
     self.createdAt = createdAt
     self.requester = requester
-    self.reason = String(reason.prefix(Self.reasonLimit))
+    self.reason = String(Self.singleLine(reason).prefix(Self.reasonLimit))
     self.targets = targets
     self.status = status
     self.decidedAt = decidedAt
     self.outcome = outcome
+  }
+
+  /// The reason is written by whoever files the request and is shown in a terminal and in the
+  /// app, so it is kept to one line: line breaks and tabs become spaces, other control
+  /// characters are dropped.
+  private static func singleLine(_ text: String) -> String {
+    var line = String.UnicodeScalarView()
+    for scalar in text.unicodeScalars {
+      if scalar.properties.generalCategory != .control {
+        line.append(scalar)
+      } else if scalar == "\n" || scalar == "\r" || scalar == "\t" {
+        line.append(" ")
+      }
+    }
+    return String(line)
   }
 }

@@ -201,6 +201,7 @@ struct CleanupProposerTests {
 
     let proposal = try #require(proposer([helper, bystander]).ending(culprit))
 
+    #expect(culprit.cleanupCommand == "End…")
     #expect(proposal.title == "End \"Web content of Example\"?")
     #expect(proposal.means == .endProcesses)
     #expect(proposal.targets.map(\.process.pid) == [700])
@@ -222,6 +223,7 @@ struct CleanupProposerTests {
 
     let proposal = try #require(proposer([launchd]).ending(culprit))
 
+    #expect(culprit.cleanupCommand == "Shut Down…")
     #expect(proposal.title == "Shut down \"iOS Simulator · Phone 99\"?")
     #expect(proposal.means == .shutDownSimulator(device: device))
     #expect(proposal.targets.map(\.process.pid) == [800])
@@ -236,6 +238,7 @@ struct CleanupProposerTests {
       id: "machine:x", title: "something", owner: .none, cpuPercent: 300, residentBytes: 0,
       processes: [process.key], load: load)
 
+    #expect(culprit.cleanupCommand == nil)
     #expect(proposer([process]).ending(culprit) == nil)
   }
 
@@ -246,6 +249,7 @@ struct CleanupProposerTests {
       cpuPercent: 200, residentBytes: 0, processes: [root.key, server.key])
     let proposer = proposer([root, server, worker], sessions: [busy])
 
+    #expect(culprit.cleanupCommand == "End Session…")
     let asSession = try #require(proposer.ending(busy.id))
     #expect(proposer.ending(culprit) == asSession)
   }
@@ -265,6 +269,9 @@ struct CleanupProposerTests {
 
     #expect(proposal.title == "Approve Cleanup request r1?")
     #expect(proposal.message == "Asked for by the Session \"fix the build\", Claude Code in alpha.")
+    #expect(
+      proposer([root, server, worker], sessions: [session()]).origin(of: request)
+        == proposal.message)
     #expect(proposal.request == request)
     #expect(proposal.targets.map(\.process.pid) == [101, 102])
     #expect(proposal.cautions.isEmpty)

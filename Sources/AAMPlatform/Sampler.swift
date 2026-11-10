@@ -81,11 +81,11 @@ public actor Sampler {
     memory = (try? store?.loadMemory()) ?? .empty
   }
 
-  /// A Sampler of this machine that keeps what it remembers in the store in its usual place.
-  public static func system() -> Sampler {
+  /// A Sampler of this machine. By default it keeps what it remembers in the store in its
+  /// usual place.
+  public static func system(store: Store? = try? Store(url: Store.defaultURL)) -> Sampler {
     let parts = SystemParts()
-    return Sampler(
-      source: parts.source, observer: parts.observer, store: try? Store(url: Store.defaultURL))
+    return Sampler(source: parts.source, observer: parts.observer, store: store)
   }
 
   public func update(_ settings: Settings) {

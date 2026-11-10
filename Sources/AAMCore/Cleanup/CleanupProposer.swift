@@ -149,7 +149,8 @@ public struct CleanupProposer: Sendable {
       + "is probably left behind. If the Session still uses it, what it offers stops working there."
   }
 
-  private func origin(of request: CleanupRequest) -> String {
+  /// Who asked for a Cleanup request, in a sentence.
+  public func origin(of request: CleanupRequest) -> String {
     guard let requester = request.requester else { return "Asked for from outside any Session." }
     guard let session = group(requester)?.session else {
       return "Asked for by a Session that has ended."
@@ -197,5 +198,18 @@ public struct CleanupProposer: Sendable {
         return CleanupProposal.Target(process: process, kind: place?.kind, session: place?.session)
       },
       refused: plan.refused, resume: resume, request: request)
+  }
+}
+
+extension Culprit {
+  /// The command that proposes a Cleanup of this Culprit, or nil when it can only be shown.
+  /// It agrees with `CleanupProposer.ending(_:)`.
+  public var cleanupCommand: String? {
+    if case .session = owner { return "End Session…" }
+    return switch load {
+    case .webContent: "End…"
+    case .simulator(.some): "Shut Down…"
+    case .simulator(nil), .virtualMachine, nil: nil
+    }
   }
 }

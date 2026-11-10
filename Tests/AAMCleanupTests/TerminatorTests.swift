@@ -89,6 +89,29 @@ struct TerminatorTests {
   }
 }
 
+struct CleanupResultTests {
+  @Test func `the outcome of a Cleanup counts what became of the processes`() {
+    let key = ProcessRecord.Key(pid: 10, startedAt: Date(timeIntervalSince1970: 0))
+    var result = CleanupResult()
+    result.ended = [key, key, key]
+    result.killed = [key, key]
+    result.survived = [key]
+    result.refused = [CleanupPlan.Refusal(process: key, reason: .gone)]
+
+    #expect(result.outcome == CleanupRequest.Outcome(ended: 3, killed: 2, survived: 1, refused: 1))
+  }
+
+  @Test func `the Terminator plans with the rules it ends by`() throws {
+    let source = SystemProcessSource(markerNames: [])
+    let me = try #require(source.record(for: getpid()))
+
+    let plan = Terminator(source: source).planner
+      .plan(for: [me.key], in: Snapshot(takenAt: Date(), processes: [me]))
+
+    #expect(plan.refused == [CleanupPlan.Refusal(process: me.key, reason: .protected)])
+  }
+}
+
 struct SimulatorControlTests {
   @Test func `a simulator is shut down by its device identifier`() {
     nonisolated(unsafe) var commands: [[String]] = []
