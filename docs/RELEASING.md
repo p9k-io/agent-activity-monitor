@@ -34,7 +34,7 @@ A release is built, signed and notarized on the maintainer's Mac. CI builds and 
 3. Open the disk image on a clean account or another Mac and try the app.
 4. Merge the release pull request. That creates the tag and the GitHub Release.
 5. Attach `dist/Agent-Activity-Monitor-<version>.dmg` and `dist/appcast.xml` to the release.
-6. Put the version and the checksum into the cask in the tap.
+6. Put the version and the checksum into `Casks/agent-activity-monitor.rb` in [p9k-io/homebrew-tap](https://github.com/p9k-io/homebrew-tap).
 
 Steps 4 to 6 are the ones other people see. Everything before them can be repeated.
 
