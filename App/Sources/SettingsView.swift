@@ -76,7 +76,14 @@ struct SettingsView: View {
       }
 
       Section {
-        LabeledContent("Version", value: AAM.version)
+        LabeledContent("Version") {
+          HStack {
+            Text(AAM.version)
+            if model.updater.isEnabled {
+              Button("Check for Updates…") { model.updater.checkForUpdates() }
+            }
+          }
+        }
       }
     }
     .formStyle(.grouped)

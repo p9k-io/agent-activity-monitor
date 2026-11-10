@@ -58,6 +58,8 @@ final class AppModel {
   let store: Store?
   /// The only thing in the app that ends processes, and only after a person confirmed.
   let terminator = Terminator(source: SystemProcessSource(markerNames: []))
+  /// Looks for a newer version of the app. Left out of debug builds.
+  let updater: Updater
 
   /// Decides when load that does not stop is worth a notification.
   private var alerts = LoadAlerts(after: .seconds(900))
@@ -76,6 +78,11 @@ final class AppModel {
       isDemo = UserDefaults.standard.bool(forKey: "demo")
     #else
       isDemo = false
+    #endif
+    #if DEBUG
+      updater = Updater(enabled: false)
+    #else
+      updater = Updater(enabled: true)
     #endif
     let store = isDemo ? nil : try? Store(url: Store.defaultURL)
     self.store = store

@@ -15,6 +15,7 @@ A native macOS app, a command line tool (`aam`) and an MCP server that show whic
 - `Sources/aam/`: the command line tool, including `aam mcp`.
 - `App/`: the SwiftUI app. `App/project.yml` is an XcodeGen spec; the Xcode project is generated and not committed. The app holds views and their model only; anything worth a test belongs in the package.
 - `Tests/`: Swift Testing suites with synthetic fixtures.
+- `scripts/release.sh` builds, signs and notarizes a release on the maintainer's Mac; [docs/RELEASING.md](docs/RELEASING.md) says how. `packaging/homebrew/` holds the cask until the tap exists.
 
 ## Commands
 
@@ -54,7 +55,7 @@ A native macOS app, a command line tool (`aam`) and an MCP server that show whic
 
 ## Ship recipe
 - Integrace: branch + PR (squash)
-- Release: merging the release-please PR creates tag vX.Y.Z and the GitHub Release; only prokopsimek merges it
+- Release: merging the release-please PR creates tag vX.Y.Z and the GitHub Release; only prokopsimek merges it. The disk image comes from `scripts/release.sh` and is attached by hand (docs/RELEASING.md). Nothing is published by CI
 - Deploy: none
 - Ověření: CI is green on main; `aam --version` prints the tagged version
 - Board: none

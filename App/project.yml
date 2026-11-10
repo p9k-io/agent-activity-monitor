@@ -11,6 +11,10 @@ options:
 packages:
   AAM:
     path: ..
+  # Looks for updates and installs them. The only reason the app uses the network.
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.1
 
 targets:
   AgentActivityMonitor:
@@ -26,6 +30,7 @@ targets:
       # Ends processes. Only the app links it (docs/adr/0001).
       - package: AAM
         product: AAMCleanup
+      - package: Sparkle
     scheme: {}
     settings:
       base:
@@ -33,11 +38,15 @@ targets:
         PRODUCT_MODULE_NAME: AgentActivityMonitor
         PRODUCT_BUNDLE_IDENTIFIER: io.p9k.agent-activity-monitor
         MARKETING_VERSION: "0.0.0" # x-release-please-version
-        CURRENT_PROJECT_VERSION: "1"
+        # The build number is the version: Sparkle decides by it whether an update is newer.
+        CURRENT_PROJECT_VERSION: "0.0.0" # x-release-please-version
         SWIFT_VERSION: "6.0"
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         SWIFT_APPROACHABLE_CONCURRENCY: YES
         GENERATE_INFOPLIST_FILE: YES
+        # What the generated file cannot express: where updates come from and the key they
+        # must be signed with.
+        INFOPLIST_FILE: Info.plist
         INFOPLIST_KEY_CFBundleDisplayName: Agent Activity Monitor
         INFOPLIST_KEY_LSUIElement: YES
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
