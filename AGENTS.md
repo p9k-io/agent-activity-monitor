@@ -16,7 +16,7 @@ A native macOS app, a command line tool (`aam`) and an MCP server that show whic
 - `Sources/aam/`: the command line tool, including `aam mcp`.
 - `App/`: the SwiftUI app. `App/project.yml` is an XcodeGen spec; the Xcode project is generated and not committed. The app holds views and their model only; anything worth a test belongs in the package.
 - `Tests/`: Swift Testing suites with synthetic fixtures.
-- `scripts/release.sh` builds, signs and notarizes a release on the maintainer's Mac; [docs/RELEASING.md](docs/RELEASING.md) says how. `packaging/homebrew/` holds the cask until the tap exists.
+- `scripts/release.sh` builds, signs and notarizes a release on the maintainer's Mac; [docs/RELEASING.md](docs/RELEASING.md) says how. The Homebrew cask lives in [p9k-io/homebrew-tap](https://github.com/p9k-io/homebrew-tap).
 
 ## Commands
 

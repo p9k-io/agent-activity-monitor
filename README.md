@@ -1,12 +1,22 @@
 # Agent Activity Monitor
 
-> Early development. Nothing is released yet.
-
 A native macOS app that shows which processes exist because of AI coding agent sessions, what is heating your Mac right now, and what can safely go.
 
 ![The Overview: what is using CPU right now, and which Session it belongs to](docs/images/overview.png)
 
 The screenshots show made-up Sessions: the app's demo mode.
+
+## Install
+
+```sh
+brew install --cask p9k-io/tap/agent-activity-monitor
+```
+
+Or download the disk image from the [latest release](https://github.com/p9k-io/agent-activity-monitor/releases/latest) and drag the app into Applications. It needs macOS 26 on Apple silicon. The app is signed and notarized, and it asks before it starts looking for updates by itself.
+
+The app lives in the menu bar. If its gauge is not there, the menu bar has run out of room and macOS has hidden it with the other items that did not fit.
+
+Homebrew also puts the command line tool, `aam`, on your path. Without Homebrew it is at `/Applications/Agent Activity Monitor.app/Contents/Helpers/aam`.
 
 ## The problem
 
@@ -15,8 +25,6 @@ A day of parallel sessions in Claude Code or Codex CLI leaves hundreds of proces
 Much of the load is not even inside a session's process tree. A simulator an agent booted, a browser pane it opened for a check, a container it started: these run under `launchd`, far from the session that caused them.
 
 ## What it does
-
-Planned for the first release:
 
 - Groups processes by project and session, for Claude Code and Codex CLI.
 - Ranks what is consuming CPU right now and says which session or project it belongs to, including load outside the session's process tree.
