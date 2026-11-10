@@ -32,13 +32,41 @@ aam culprits    # what is consuming CPU right now and whom it belongs to
 aam stale       # what is no longer needed, and why
 aam mine        # the Session this command runs in and what is attributed to it
 
+aam report --days 7   # where CPU time went, per Session and Project
+
 aam request-cleanup 4242 --reason "left over from my test run"
 aam requests    # Cleanup requests and what was decided about them
 ```
 
 `aam` never ends a process. A Session that wants something gone files a Cleanup request, and a person decides about it in the app.
 
-What `aam` and the app remember (which process belonged to which Session, and when a Session ended) is kept in `~/Library/Application Support/io.p9k.agent-activity-monitor/aam.sqlite`. Set `AAM_STORE` to keep it somewhere else.
+What `aam` and the app remember is kept in `~/Library/Application Support/io.p9k.agent-activity-monitor/aam.sqlite`: which process belonged to which Session, when a Session ended, Cleanup requests, and the CPU time each Session used per minute. Set `AAM_STORE` to keep it somewhere else. History and decided requests are dropped after 30 days.
+
+## History
+
+While the app runs, it adds up the CPU time and the peak memory of each Session per minute and kind of process. **Reports** in the app and `aam report` show where it went over the last day, week or month. What uses less than 1 % of one core is not counted, so an idle Session leaves no trace.
+
+The app can tell you when something keeps using CPU: switch on **Alerts** in Settings and choose how long and how much. It is off until you ask for it.
+
+## For agents
+
+`aam mcp` serves the same facts over the Model Context Protocol, so a Session can see what is attributed to it and ask for a Cleanup of what it no longer needs. Connect it yourself; the app never changes a Harness's configuration.
+
+```sh
+claude mcp add aam -- aam mcp    # Claude Code
+codex mcp add aam -- aam mcp     # Codex CLI
+```
+
+| Tool | What it does |
+| --- | --- |
+| `list_sessions` | The running Sessions with Project, state, memory and Resume command. |
+| `my_session` | The Session the server runs in and what is attributed to it. |
+| `list_culprits` | What is using CPU right now and whom it belongs to. |
+| `list_stale` | What is no longer needed, and why. |
+| `request_cleanup` | Files a Cleanup request for a person to decide in the app. |
+| `get_request` | What was decided about a Cleanup request. |
+
+None of them ends a process. At most 50 requests wait for a decision at a time, and a request names at most 100 processes.
 
 ## Cleanup
 

@@ -52,8 +52,10 @@ public actor Sampler {
     }
   }
 
-  /// How long an ended Session is remembered.
+  /// How long an ended Session, history and decided Cleanup requests are kept.
   private static let retention: TimeInterval = 30 * 24 * 3600
+  /// What is too old is dropped on every this-many-th save.
+  private static let pruneEverySaves = 200
 
   private let source: any SamplingSource
   private let observer: Observer
@@ -65,6 +67,7 @@ public actor Sampler {
   private var settings: Settings
   private var memory: Memory
   private var tracker = CulpritTracker()
+  private var history = HistoryRecorder()
   private var ticks = 0
   private var previous: Snapshot?
   private var lastRefresh: Snapshot?
@@ -117,8 +120,18 @@ public actor Sampler {
 
     memory.absorb(observation, usage: previous == nil ? nil : usage)
     memory.forget(sessionsEndedBefore: now.addingTimeInterval(-Self.retention))
+    if let previous {
+      history.record(
+        observation.inventory, usage: usage,
+        elapsed: now.timeIntervalSince(previous.takenAt), at: now)
+    }
     if saving {
       try? store?.save(memory)
+      try? store?.record(history.drain())
+      // Once in a long while is enough for dropping what is too old.
+      if ticks % (saveEvery * Self.pruneEverySaves) == 1 {
+        try? store?.prune(before: now.addingTimeInterval(-Self.retention))
+      }
     }
     previous = snapshot
 
@@ -138,6 +151,7 @@ public actor Sampler {
   /// Writes what is remembered to the store now, as before the app quits.
   public func flush() {
     try? store?.save(memory)
+    try? store?.record(history.drain())
   }
 
   /// CPU use of every process. The current user's processes are measured since the look

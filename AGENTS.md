@@ -9,8 +9,8 @@ A native macOS app, a command line tool (`aam`) and an MCP server that show whic
 
 ## Layout
 
-- `Sources/AAMCore/`: the domain with no I/O. Model, Attribution, Stale rules, Culprit ranking, reports.
-- `Sources/AAMPlatform/`: macOS adapters. Process sources, Harness adapters, Host adapters, the store.
+- `Sources/AAMCore/`: the domain with no I/O. Model, Attribution, Stale rules, Culprit ranking, Cleanup proposals, history and reports.
+- `Sources/AAMPlatform/`: macOS adapters. Process sources, Harness adapters, Host adapters, the store, the Sampler, the MCP server.
 - `Sources/AAMCleanup/`: the only code that ends processes. Only the app links it.
 - `Sources/aam/`: the command line tool, including `aam mcp`.
 - `App/`: the SwiftUI app. `App/project.yml` is an XcodeGen spec; the Xcode project is generated and not committed. The app holds views and their model only; anything worth a test belongs in the package.
@@ -40,6 +40,7 @@ A native macOS app, a command line tool (`aam`) and an MCP server that show whic
 - **The app runs all the time, so a look must stay cheap** ([ADR 0004](docs/adr/0004-always-running-sampler-with-lineage.md)). The budget is under 1 % of one core on average. What does not change is read once and kept; what is expensive is done every few looks. Measure before and after a change to the Sampler or to anything it calls.
 - Check a change to the app by looking at it: run it, capture the window, compare what it shows with `aam … --json`.
 - Write the failing test first. Tests finish within 5 seconds each.
+- In an `async` test, do not call `Process.waitUntilExit` after an `await`: it runs the run loop of the thread it is called on, which may not be the one the process reports to, and then it never returns. Wait for the termination handler instead, as `RunningHelper.exit()` does.
 - UI text, identifiers, comments and documentation are in English.
 - Commits follow Conventional Commits. Pull requests are squash-merged, so the pull request title is the commit message.
 

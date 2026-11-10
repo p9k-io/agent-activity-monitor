@@ -156,6 +156,38 @@
         findings: StalenessRules().findings(in: inventory, memory: memory, now: now))
     }
 
+    /// A made-up week of CPU time for the Sessions above.
+    static let report: UsageReport = {
+      let storefront = Project(root: DemoData.storefront)
+      let api = Project(root: DemoData.api)
+      let checkout = SessionID(harness: .claudeCode, value: "demo-checkout")
+      let flaky = SessionID(harness: .codex, value: "demo-flaky")
+      let limiter = SessionID(harness: .claudeCode, value: "demo-limiter")
+      func total(_ project: Project, _ session: SessionID?, _ kind: ProcessKind, hours: Double)
+        -> UsageTotal
+      {
+        UsageTotal(project: project, session: session, kind: kind, cpuSeconds: hours * 3600)
+      }
+      return UsageReport(
+        totals: [
+          total(storefront, checkout, .testRunner, hours: 9.4),
+          total(storefront, checkout, .harness, hours: 2.1),
+          total(storefront, checkout, .devServer, hours: 0.8),
+          total(storefront, flaky, .testRunner, hours: 3.2),
+          total(storefront, flaky, .harness, hours: 0.9),
+          total(api, limiter, .harness, hours: 1.6),
+          total(api, limiter, .mcpServer, hours: 0.3),
+          total(api, nil, .devServer, hours: 0.7),
+        ],
+        peaks: [
+          UsagePeak(project: storefront, session: checkout, residentBytes: 1_900 * 1_048_576),
+          UsagePeak(project: storefront, session: flaky, residentBytes: 620 * 1_048_576),
+          UsagePeak(project: api, session: limiter, residentBytes: 540 * 1_048_576),
+          UsagePeak(project: api, session: nil, residentBytes: 210 * 1_048_576),
+        ],
+        titles: [checkout: "Checkout redesign", flaky: "Fix flaky tests", limiter: "Rate limiter"])
+    }()
+
     /// Cleanup requests about the made-up processes: two that were decided and two that wait.
     static func requests(for sample: Sample) -> [CleanupRequest] {
       let now = sample.takenAt

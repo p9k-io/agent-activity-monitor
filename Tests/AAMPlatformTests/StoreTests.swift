@@ -127,4 +127,101 @@ struct StoreTests {
 
     #expect(try store.requests() == [anonymous])
   }
+
+  // MARK: History
+
+  let alpha = Project(root: "/work/alpha")
+  let first = SessionID(harness: .claudeCode, value: "s1")
+
+  func bucket(
+    at seconds: TimeInterval, cpu: Double, peak: UInt64 = 0, kind: ProcessKind = .testRunner,
+    session: SessionID? = SessionID(harness: .claudeCode, value: "s1")
+  ) -> HistoryBucket {
+    HistoryBucket(
+      minute: epoch.addingTimeInterval(seconds), project: alpha, session: session, kind: kind,
+      cpuSeconds: cpu, peakResidentBytes: peak)
+  }
+
+  @Test func `CPU time recorded for the same minute is added up and the larger peak is kept`()
+    throws
+  {
+    let store = try Store(url: url)
+
+    try store.record([bucket(at: 0, cpu: 10, peak: 500)])
+    try store.record([bucket(at: 0, cpu: 5, peak: 300)])
+
+    #expect(
+      try store.usageTotals(since: epoch)
+        == [UsageTotal(project: alpha, session: first, kind: .testRunner, cpuSeconds: 15)])
+    #expect(
+      try store.usagePeaks(since: epoch)
+        == [UsagePeak(project: alpha, session: first, residentBytes: 500)])
+  }
+
+  @Test func `a period leaves out what happened before it`() throws {
+    let store = try Store(url: url)
+
+    try store.record([bucket(at: -120, cpu: 100), bucket(at: 0, cpu: 10)])
+
+    #expect(try store.usageTotals(since: epoch.addingTimeInterval(-60)).map(\.cpuSeconds) == [10])
+  }
+
+  @Test func `the peak of a Session is the most its kinds of process held in one minute`() throws {
+    let store = try Store(url: url)
+
+    try store.record([
+      bucket(at: 0, cpu: 1, peak: 500), bucket(at: 0, cpu: 1, peak: 300, kind: .harness),
+      bucket(at: 60, cpu: 1, peak: 600),
+    ])
+
+    #expect(try store.usagePeaks(since: epoch).map(\.residentBytes) == [800])
+  }
+
+  @Test func `what belongs to no Session is kept apart from the Sessions`() throws {
+    let store = try Store(url: url)
+
+    try store.record([bucket(at: 0, cpu: 4), bucket(at: 0, cpu: 6, session: nil)])
+
+    let totals = try store.usageTotals(since: epoch)
+    #expect(Set(totals.map(\.session)) == [first, nil])
+    #expect(totals.first { $0.session == nil }?.cpuSeconds == 6)
+  }
+
+  @Test func `history and decided requests older than the retention are dropped`() throws {
+    let store = try Store(url: url)
+    try store.record([bucket(at: -100, cpu: 1), bucket(at: 0, cpu: 2)])
+    var decided = request("old-decided", after: -100)
+    decided.status = .denied
+    decided.decidedAt = epoch.addingTimeInterval(-90)
+    var recent = request("recent-decided", after: -100)
+    recent.status = .denied
+    recent.decidedAt = epoch
+    for filed in [decided, recent, request("old-waiting", after: -100)] {
+      try store.add(filed)
+      try store.update(filed)
+    }
+
+    try store.prune(before: epoch.addingTimeInterval(-50))
+
+    #expect(try store.usageTotals(since: .distantPast).map(\.cpuSeconds) == [2])
+    #expect(try store.requests().map(\.id) == ["old-waiting", "recent-decided"])
+  }
+
+  @Test func `a report names each Session by the title that is remembered for it`() throws {
+    let store = try Store(url: url)
+    var memory = Memory.empty
+    memory.sessions[first] = Memory.PastSession(
+      project: alpha, title: "Fix login", markers: [:], lastSeenAt: epoch, endedAt: nil)
+    try store.save(memory)
+    try store.record([
+      bucket(at: 0, cpu: 30, peak: 700), bucket(at: 0, cpu: 12, session: nil),
+      bucket(at: -3600, cpu: 500),
+    ])
+
+    let report = try store.usageReport(since: epoch.addingTimeInterval(-60))
+
+    #expect(report.rows.map(\.title) == ["Fix login", "Not tied to one Session"])
+    #expect(report.rows.map(\.cpuSeconds) == [30, 12])
+    #expect(report.rows.first?.peakResidentBytes == 700)
+  }
 }
